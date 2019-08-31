@@ -8,7 +8,7 @@ class IoAccess {
   // Every access provider is responsible for 32 IOs
   // Value 255 is the reserved value for invalid pins
 public:
-  bool addIoProvider(IoProviders type, uint8_t position, uint8_t options) {
+  void addIoProvider(IoProviders type, uint8_t position, uint8_t options) {
     // check if position exists
     if (position >= sizeof(provider) / sizeof(provider[0])) {
       return false;
@@ -33,6 +33,17 @@ public:
       default:
         return false;
       }
+  }
+  uint8_t initProvider() {
+    uint8_t result = 0;
+    for (int i = 0; i < sizeof(provider) / sizeof(provider[0]); i++) {
+      if (provider[i] != nullptr) {
+        if (provider[i] -> init() != true) {
+          result += 1 << i;
+        }
+      }
+    }
+    return result;
   }
   // returns the capabilities
   bool isDigitalInput(uint8_t port) {
