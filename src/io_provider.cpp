@@ -39,7 +39,7 @@ public:
 
   // normal interactions during runtime
   bool getDigitalInput(uint8_t port)  const {return false;}
-  uint16_t getAnalogInput(uint8_t port)  const {return UINT16_MAX;}
+  int getAnalogInput(uint8_t port)  const {return UINT16_MAX;}
   float getAnalogInputScaled(uint8_t port)  const {return 0.0f;}
   void setDigitalOutput(uint8_t port, bool state) {};
   void setPwmOutput(uint8_t port, uint8_t dutyCycle) {};
@@ -80,7 +80,8 @@ protected:
     pwmOutput,
     rawIo,
     disabled
-  };  portState configuration[32];
+  };
+  portState configuration[32];
 
 
 private:

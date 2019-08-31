@@ -104,7 +104,7 @@ bool getDigitalInput(uint8_t port)  const {
   return digitalRead(portMapping[port]);
 }
 
-uint16_t getAnalogInput(uint8_t port)  const {
+int getAnalogInput(uint8_t port)  const {
   return (uint16_t)analogRead(portMapping[port]);
 }
 uint16_t getAnalogInputScaled(uint8_t port)  const {
