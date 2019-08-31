@@ -5,8 +5,8 @@
 enum class IoProviders : uint8_t {
   None = 0,
   ESP32_IO = 1,
-  ADS1115_48 = 8,
-  FXL6408_43 = 16
+  ADS1115 = 8,
+  FXL6408 = 16
 } ;
 
 class IoProvider {

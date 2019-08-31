@@ -8,7 +8,7 @@ class IoAccess {
   // Every access provider is responsible for 32 IOs
   // Value 255 is the reserved value for invalid pins
 public:
-  bool addIoProvider(IoProviders type, uint8_t position) {
+  bool addIoProvider(IoProviders type, uint8_t position, uint8_t options) {
     // check if position exists
     if (position >= sizeof(provider) / sizeof(provider[0])) {
       return false;
@@ -24,10 +24,10 @@ public:
       case ESP32_IO:
         provider[position] = new IoProvider_ESP32();
         return provider[position] -> init();
-      case ADS1115_48:
-        provider[position] = new IoProvider_ADS115(0x48);
+      case ADS1115:
+        provider[position] = new IoProvider_ADS115(options);
         return provider[position] -> init();
-      case FXL6408_43:
+      case FXL6408:
         provider[position] = new IoProvider_FXL6408(0x43);
         return provider[position] -> init();
       default:
