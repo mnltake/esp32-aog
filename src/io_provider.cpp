@@ -38,9 +38,9 @@ public:
   }
 
   // normal interactions during runtime
-  bool getDigitalInput(uint8_t port)  const {return false;}
-  int getAnalogInput(uint8_t port)  const {return UINT16_MAX;}
-  float getAnalogInputScaled(uint8_t port)  const {return 0.0f;}
+  bool getDigitalInput(uint8_t port) {return false;}
+  int getAnalogInput(uint8_t port) {return INT_MAX;}
+  float getAnalogInputScaled(uint8_t port) {return 0.0f;}
   void setDigitalOutput(uint8_t port, bool state) {};
   void setPwmOutput(uint8_t port, uint8_t dutyCycle) {};
 
