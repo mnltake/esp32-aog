@@ -81,7 +81,7 @@ void autosteerWorker100Hz( void* z ) {
         break;
       }
 
-      if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
+      if ( steerConfig.gpioEn != 255 ) {
         digitalWrite( ( uint8_t )steerConfig.gpioEn, HIGH );
       }
     } else {
@@ -184,7 +184,7 @@ void autosteerWorker100Hz( void* z ) {
 
               ledcWrite( 0, driveValue );
 
-              if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
+              if ( steerConfig.gpioEn != 255 ) {
                 digitalWrite( ( uint8_t )steerConfig.gpioEn, HIGH );
               }
             }
@@ -211,7 +211,7 @@ void autosteerWorker100Hz( void* z ) {
               break;
           }
 
-          if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
+          if ( steerConfig.gpioEn != 255 ) {
             digitalWrite( ( uint8_t )steerConfig.gpioEn, HIGH );
           }
         }
@@ -287,7 +287,7 @@ void autosteerWorker100Hz( void* z ) {
 
               ledcWrite( 0, pidOutputTmp );
 
-              if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
+              if ( steerConfig.gpioEn != 255 ) {
                 digitalWrite( ( uint8_t )steerConfig.gpioEn, HIGH );
               }
             }
@@ -314,7 +314,7 @@ void autosteerWorker100Hz( void* z ) {
               break;
           }
 
-          if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
+          if ( steerConfig.gpioEn != 255 ) {
             digitalWrite( ( uint8_t )steerConfig.gpioEn, HIGH );
           }
         } else {
@@ -436,7 +436,7 @@ void autosteerWorker100Hz( void* z ) {
               data[8] |= workswitchState ? 1 : 0;
             }
 
-            if ( steerConfig.gpioSteerswitch != SteerConfig::Gpio::None ) {
+            if ( steerConfig.gpioSteerswitch != 255 ) {
               static time_t lastRisingEdge = 0;
               static bool lastInputState = false;
 
@@ -609,21 +609,21 @@ void initAutosteer() {
 
   // init output
   {
-    if ( steerConfig.gpioPwm != SteerConfig::Gpio::None ) {
+    if ( steerConfig.gpioPwm != 255 ) {
       pinMode( ( uint8_t )steerConfig.gpioPwm, OUTPUT );
       ledcSetup( 0, 1000/*steerConfig.pwmFrequency*/, 8 );
       ledcAttachPin( ( uint8_t )steerConfig.gpioPwm, 0 );
       ledcWrite( 0, 0 );
     }
 
-    if ( steerConfig.gpioDir != SteerConfig::Gpio::None ) {
+    if ( steerConfig.gpioDir != 255 ) {
       pinMode( ( uint8_t )steerConfig.gpioDir, OUTPUT );
       ledcSetup( 0, 1000/*steerConfig.pwmFrequency*/, 8 );
       ledcAttachPin( ( uint8_t )steerConfig.gpioDir, 0 );
       ledcWrite( 0, 0 );
     }
 
-    if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
+    if ( steerConfig.gpioEn != 255 ) {
       pinMode( ( uint8_t )steerConfig.gpioEn, OUTPUT );
       digitalWrite( ( uint8_t )steerConfig.gpioEn, LOW );
     }
@@ -632,9 +632,9 @@ void initAutosteer() {
       case SteerConfig::OutputType::SteeringMotorIBT2: {
         Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
 
-        if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
-             steerConfig.gpioDir != SteerConfig::Gpio::None &&
-             steerConfig.gpioEn  != SteerConfig::Gpio::None ) {
+        if ( steerConfig.gpioPwm != 255 &&
+             steerConfig.gpioDir != 255 &&
+             steerConfig.gpioEn  != 255 ) {
           labelStatusOutputHandle->value = "Output configured";
           labelStatusOutputHandle->color = ControlColor::Emerald;
           ESPUI.updateControl( labelStatusOutputHandle );
@@ -653,8 +653,8 @@ void initAutosteer() {
       case SteerConfig::OutputType::SteeringMotorCytron: {
         Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
 
-        if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
-             steerConfig.gpioDir != SteerConfig::Gpio::None ) {
+        if ( steerConfig.gpioPwm != 255 &&
+             steerConfig.gpioDir != 255 ) {
           labelStatusOutputHandle->value = "Output configured";
           labelStatusOutputHandle->color = ControlColor::Emerald;
           ESPUI.updateControl( labelStatusOutputHandle );
@@ -673,8 +673,8 @@ void initAutosteer() {
       case SteerConfig::OutputType::HydraulicPwm2Coil: {
         Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
 
-        if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
-             steerConfig.gpioDir != SteerConfig::Gpio::None ) {
+        if ( steerConfig.gpioPwm != 255 &&
+             steerConfig.gpioDir != 255 ) {
           labelStatusOutputHandle->value = "Output configured";
           labelStatusOutputHandle->color = ControlColor::Emerald;
           ESPUI.updateControl( labelStatusOutputHandle );
@@ -693,8 +693,8 @@ void initAutosteer() {
       case SteerConfig::OutputType::HydraulicDanfoss: {
         Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
 
-        if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
-             steerConfig.gpioDir != SteerConfig::Gpio::None ) {
+        if ( steerConfig.gpioPwm != 255 &&
+             steerConfig.gpioDir != 255 ) {
           labelStatusOutputHandle->value = "Output configured";
           labelStatusOutputHandle->color = ControlColor::Emerald;
           ESPUI.updateControl( labelStatusOutputHandle );
@@ -717,21 +717,18 @@ void initAutosteer() {
 
   }
 
-  if ( steerConfig.gpioWorkswitch != SteerConfig::Gpio::None ) {
+  if ( steerConfig.gpioWorkswitch != 255 ) {
     pinMode( ( uint8_t )steerConfig.gpioWorkswitch, INPUT_PULLUP );
   }
 
-  if ( steerConfig.gpioSteerswitch != SteerConfig::Gpio::None ) {
+  if ( steerConfig.gpioSteerswitch != 255 ) {
     pinMode( ( uint8_t )steerConfig.gpioSteerswitch, INPUT_PULLUP );
   }
 
-  if ( steerConfig.gpioWheelencoderA != SteerConfig::Gpio::None &&
-       steerConfig.gpioWheelencoderB != SteerConfig::Gpio::None ) {
+  if ( steerConfig.gpioWheelencoderA != 255 &&
+       steerConfig.gpioWheelencoderB != 255 ) {
 
   }
 
   xTaskCreate( autosteerWorker100Hz, "autosteerWorker", 4096, NULL, 3, NULL );
 }
-
-
-

@@ -90,43 +90,36 @@ void writeEeprom() {
 }
 
 void addGpioOutput( uint16_t parent ) {
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 4",        String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio4 ),  ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 5",        String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio5 ),  ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 12",       String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio12 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 13 / A12", String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio13 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 14",       String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio14 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 15",       String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio15 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 21",       String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio21 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 22",       String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio22 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 23",       String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio23 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 25",       String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio25 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 26",       String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio26 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 27",       String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio27 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 32 / A7",  String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio32 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 33 / A9",  String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio33 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 35",       String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio35 ), ControlColor::Alizarin, parent );
+  for(int i = 0; i < 256; i++) {
+    if (IoAccess::isDigitalOutput(i)) {
+      String portName = IoAccess::getPortName(i);
+      char cPortName[portName.length()+1];
+      portName.toCharArray(cPortName, portName.length() );
+      ESPUI.addControl( ControlType::Option, cPortName, String(i),  ControlColor::Alizarin, parent );
+    }
+  }
 }
 void addGpioInput( uint16_t parent ) {
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 34 / A2 (only input)", String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio34 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 36 / A4 (only input)", String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio36 ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 GPIO 39 / A3 (only input)", String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio39 ), ControlColor::Alizarin, parent );
+  for(int i = 0; i < 256; i++) {
+    if (IoAccess::isDigitalInput(i)) {
+      String portName = IoAccess::getPortName(i);
+      char cPortName[portName.length()+1];
+      portName.toCharArray(cPortName, portName.length() );
+      ESPUI.addControl( ControlType::Option, cPortName, String(i),  ControlColor::Alizarin, parent );
+    }
+  }
 }
 void addAnalogInput( uint16_t parent ) {
-  ESPUI.addControl( ControlType::Option, "ESP32 A2",  String( ( uint8_t )SteerConfig::AnalogIn::Esp32GpioA2 ),  ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 A3",  String( ( uint8_t )SteerConfig::AnalogIn::Esp32GpioA3 ),  ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 A4",  String( ( uint8_t )SteerConfig::AnalogIn::Esp32GpioA4 ),  ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 A7",  String( ( uint8_t )SteerConfig::AnalogIn::Esp32GpioA7 ),  ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 A9",  String( ( uint8_t )SteerConfig::AnalogIn::Esp32GpioA9 ),  ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ESP32 A12", String( ( uint8_t )SteerConfig::AnalogIn::Esp32GpioA12 ), ControlColor::Alizarin, parent );
+  for(int i = 0; i < 256; i++) {
+    if (IoAccess::isAnalogInput(i)) {
+      String portName = IoAccess::getPortName(i);
+      char cPortName[portName.length()+1];
+      portName.toCharArray(cPortName, portName.length() );
+      ESPUI.addControl( ControlType::Option, cPortName, String(i),  ControlColor::Alizarin, parent );
+    }
+  }
 }
-void addAnalogInputADS1115( uint16_t parent ) {
-  ESPUI.addControl( ControlType::Option, "ADS1115 A0 Single",       String( ( uint8_t )SteerConfig::AnalogIn::ADS1115A0Single ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ADS1115 A1 Single",       String( ( uint8_t )SteerConfig::AnalogIn::ADS1115A1Single ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ADS1115 A2 Single",       String( ( uint8_t )SteerConfig::AnalogIn::ADS1115A2Single ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ADS1115 A3 Single",       String( ( uint8_t )SteerConfig::AnalogIn::ADS1115A3Single ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ADS1115 A0 Differential", String( ( uint8_t )SteerConfig::AnalogIn::ADS1115A0A1Differential ), ControlColor::Alizarin, parent );
-  ESPUI.addControl( ControlType::Option, "ADS1115 A2 Differential", String( ( uint8_t )SteerConfig::AnalogIn::ADS1115A2A3Differential ), ControlColor::Alizarin, parent );
-}
+
 
 ///////////////////////////////////////////////////////////////////////////
 // Application
@@ -137,8 +130,9 @@ void setup( void ) {
   Serial.begin( 115200 );
   Serial.println( "Setup()" );
 
-  pinMode( 13, OUTPUT );
-  digitalWrite( 13, LOW );
+  // TODO: create status-LED after IO abstraction
+  //pinMode( 13, OUTPUT );
+  //digitalWrite( 13, LOW );
 
   // add all the partitions for the EEPROM emulation
   EEPROM.add_by_subtype( 0x99 );
@@ -156,8 +150,12 @@ void setup( void ) {
     writeEeprom();
   }
 
+// Set up IO abstraction
+
 // Init I2C
 Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.i2cBusSpeed );
+
+// Init IO abstraction
 
 #if defined(ESP32)
   WiFi.setHostname( steerConfig.hostname );
@@ -313,7 +311,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
     {
       uint16_t sel = ESPUI.addControl( ControlType::Select, "Pin for RX*", String( ( int )steerConfig.canBusRx ), ControlColor::Wetasphalt, tab,
       []( Control * control, int id ) {
-        steerConfig.canBusRx = ( SteerConfig::Gpio )control->value.toInt();
+        steerConfig.canBusRx = control->value.toInt();
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
@@ -322,7 +320,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
     {
       uint16_t sel = ESPUI.addControl( ControlType::Select, "Pin for TX*", String( ( int )steerConfig.canBusTx ), ControlColor::Wetasphalt, tab,
       []( Control * control, int id ) {
-        steerConfig.canBusTx = ( SteerConfig::Gpio )control->value.toInt();
+        steerConfig.canBusTx = control->value.toInt();
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
@@ -397,7 +395,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
 //     {
 //       uint16_t sel = ESPUI.addControl( ControlType::Select, "Workswitch LED*", String( ( int )steerConfig.gpioWorkswitch ), ControlColor::Wetasphalt, tab,
 //       []( Control * control, int id ) {
-//         steerConfig.gpioWorkswitch = ( SteerConfig::Gpio )control->value.toInt();
+//         steerConfig.gpioWorkswitch = control->value.toInt();
 //         setResetButtonToRed();
 //       } );
 //       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
@@ -407,7 +405,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
     {
       uint16_t sel = ESPUI.addControl( ControlType::Select, "Autosteer switch/button Gpio*", String( ( int )steerConfig.gpioSteerswitch ), ControlColor::Wetasphalt, tab,
       []( Control * control, int id ) {
-        steerConfig.gpioSteerswitch = ( SteerConfig::Gpio )control->value.toInt();
+        steerConfig.gpioSteerswitch = control->value.toInt();
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
@@ -432,7 +430,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
 //     {
 //       uint16_t sel = ESPUI.addControl( ControlType::Select, "Autosteer LED*", String( ( int )steerConfig.gpioSteerswitch ), ControlColor::Wetasphalt, tab,
 //       []( Control * control, int id ) {
-//         steerConfig.gpioSteerswitch = ( SteerConfig::Gpio )control->value.toInt();
+//         steerConfig.gpioSteerswitch = control->value.toInt();
 //         setResetButtonToRed();
 //       } );
 //       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
@@ -443,7 +441,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
     {
       uint16_t sel = ESPUI.addControl( ControlType::Select, "Workswitch Gpio*", String( ( int )steerConfig.gpioWorkswitch ), ControlColor::Wetasphalt, tab,
       []( Control * control, int id ) {
-        steerConfig.gpioWorkswitch = ( SteerConfig::Gpio )control->value.toInt();
+        steerConfig.gpioWorkswitch = control->value.toInt();
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
@@ -466,11 +464,10 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
     {
       uint16_t sel = ESPUI.addControl( ControlType::Select, "Wheel Angle Sensor*", String( ( int )steerConfig.wheelAngleInput ), ControlColor::Wetasphalt, tab,
       []( Control * control, int id ) {
-        steerConfig.wheelAngleInput = ( SteerConfig::AnalogIn )control->value.toInt();
+        steerConfig.wheelAngleInput = control->value.toInt();
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
-      addAnalogInputADS1115( sel );
       addAnalogInput( sel );
     }
 
@@ -590,7 +587,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
     {
       uint16_t sel = ESPUI.addControl( ControlType::Select, "Output Pin for PWM (or right coil)*", String( ( int )steerConfig.gpioPwm ), ControlColor::Wetasphalt, tab,
       []( Control * control, int id ) {
-        steerConfig.gpioPwm = ( SteerConfig::Gpio )control->value.toInt();
+        steerConfig.gpioPwm = control->value.toInt();
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
@@ -599,7 +596,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
     {
       uint16_t sel = ESPUI.addControl( ControlType::Select, "Output Pin for Dir (or left coil)*", String( ( int )steerConfig.gpioDir ), ControlColor::Wetasphalt, tab,
       []( Control * control, int id ) {
-        steerConfig.gpioDir = ( SteerConfig::Gpio )control->value.toInt();
+        steerConfig.gpioDir = control->value.toInt();
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
@@ -608,7 +605,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
     {
       uint16_t sel = ESPUI.addControl( ControlType::Select, "Output Pin for Enable*", String( ( int )steerConfig.gpioEn ), ControlColor::Wetasphalt, tab,
       []( Control * control, int id ) {
-        steerConfig.gpioEn = ( SteerConfig::Gpio )control->value.toInt();
+        steerConfig.gpioEn = control->value.toInt();
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
@@ -730,7 +727,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
     {
       uint16_t sel = ESPUI.addControl( ControlType::Select, "I2C SDA Gpio*", String( ( int )steerConfig.gpioSDA ), ControlColor::Wetasphalt, tab,
       []( Control * control, int id ) {
-        steerConfig.gpioSDA = ( SteerConfig::Gpio )control->value.toInt();
+        steerConfig.gpioSDA = control->value.toInt();
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "Board Default", "-1", ControlColor::Alizarin, sel );
@@ -739,7 +736,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
     {
       uint16_t sel = ESPUI.addControl( ControlType::Select, "I2C SCL Gpio*", String( ( int )steerConfig.gpioSCL ), ControlColor::Wetasphalt, tab,
       []( Control * control, int id ) {
-        steerConfig.gpioSCL = ( SteerConfig::Gpio )control->value.toInt();
+        steerConfig.gpioSCL = control->value.toInt();
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "Board Default", "-1", ControlColor::Alizarin, sel );
@@ -835,7 +832,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
 //     {
 //       uint16_t sel = ESPUI.addControl( ControlType::Select, "Steering Wheel Encoder Input A*", String( ( int )steerConfig.gpioWheelencoderA ), ControlColor::Wetasphalt, tab,
 //       []( Control * control, int id ) {
-//         steerConfig.gpioWheelencoderA = ( SteerConfig::Gpio )control->value.toInt();
+//         steerConfig.gpioWheelencoderA = control->value.toInt();
 //         setResetButtonToRed();
 //       } );
 //       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
@@ -845,7 +842,7 @@ Wire.begin( ( int )steerConfig.gpioSDA, ( int )steerConfig.gpioSCL, steerConfig.
 //     {
 //       uint16_t sel = ESPUI.addControl( ControlType::Select, "Steering Wheel Encoder Input B*", String( ( int )steerConfig.gpioWheelencoderB ), ControlColor::Wetasphalt, tab,
 //       []( Control * control, int id ) {
-//         steerConfig.gpioWheelencoderB = ( SteerConfig::Gpio )control->value.toInt();
+//         steerConfig.gpioWheelencoderB = control->value.toInt();
 //         setResetButtonToRed();
 //       } );
 //       ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );

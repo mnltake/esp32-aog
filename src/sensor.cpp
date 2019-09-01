@@ -39,7 +39,7 @@
 #include <Mahony.h>
 #include <Madgwick.h>
 
-#include <Adafruit_ADS1015.h>
+#include "io_access.hpp"
 
 
 #include <ESPUI.h>
@@ -53,7 +53,6 @@ Adafruit_MMA8451 mma = Adafruit_MMA8451();
 Adafruit_BNO055 bno = Adafruit_BNO055( 55 );
 Adafruit_FXAS21002C fxas2100 = Adafruit_FXAS21002C( 0x0021002C );
 Adafruit_FXOS8700 fxos8700 = Adafruit_FXOS8700( 0x8700A, 0x8700B );
-Adafruit_ADS1115 ads = Adafruit_ADS1115( 0x48 );
 
 Madgwick ahrs;
 // Mahony filter;
@@ -528,45 +527,8 @@ void sensorWorker100HzPoller( void* z ) {
       }
     }
 
-
-    if ( steerConfig.wheelAngleInput != SteerConfig::AnalogIn::None ) {
-      float wheelAngleTmp = 0;
-
-      switch ( ( uint8_t )steerConfig.wheelAngleInput ) {
-        case ( uint8_t )SteerConfig::AnalogIn::Esp32GpioA2 ...( uint8_t )SteerConfig::AnalogIn::Esp32GpioA12: {
-          wheelAngleTmp = analogRead( ( uint8_t )steerConfig.wheelAngleInput );
-        }
-        break;
-
-        case ( uint8_t )SteerConfig::AnalogIn::ADS1115A0Single ...( uint8_t )SteerConfig::AnalogIn::ADS1115A3Single: {
-          if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
-            wheelAngleTmp = ads.readADC_SingleEnded(
-                              ( uint8_t )steerConfig.wheelAngleInput - ( uint8_t )SteerConfig::AnalogIn::ADS1115A0Single );
-            xSemaphoreGive( i2cMutex );
-          }
-        }
-        break;
-
-        case ( uint8_t )SteerConfig::AnalogIn::ADS1115A0A1Differential: {
-          if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
-            wheelAngleTmp = ads.readADC_Differential_0_1();
-            xSemaphoreGive( i2cMutex );
-          }
-        }
-        break;
-
-        case ( uint8_t )SteerConfig::AnalogIn::ADS1115A2A3Differential: {
-          if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
-            wheelAngleTmp = ads.readADC_Differential_2_3();
-            xSemaphoreGive( i2cMutex );
-          }
-        }
-        break;
-
-        default:
-          break;
-      }
-
+    if ( steerConfig.wheelAngleInput != 255 ) {
+      float wheelAngleTmp = IoAccess::getAnalogInput(( uint8_t )steerConfig.wheelAngleInput);
       {
         if ( steerConfig.allowWheelAngleCenterAndCountsOverwrite ) {
           wheelAngleTmp -= steerSettings.wheelAnglePositionZero;
@@ -823,25 +785,6 @@ void initSensors() {
 
   }
 
-  // initialise ads1115 everytime, even if not avaible (no answer in the init -> just sending)
-  {
-    ads.setGain( GAIN_TWOTHIRDS );   // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
-    // ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV
-    // ads.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 1mV      0.0625mV
-    // ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.5mV    0.03125mV
-    // ads.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.25mV   0.015625mV
-    // ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
-
-    ads.begin();
-    ads.setSPS( ADS1115_DR_860SPS );
-
-    Control* handle = ESPUI.getControl( labelStatusAdc );
-    handle->value = "ADC1115 initialized";
-    handle->color = ControlColor::Emerald;
-    initialisation.wheelAngleInput = steerConfig.wheelAngleInput;
-    ESPUI.updateControl( handle );
-  }
-
   if ( steerConfig.imuType == SteerConfig::ImuType::BNO055 ) {
     xTaskCreate( sensorWorker1HzPoller, "sensorWorker1HzPoller", 4096, NULL, 1, NULL );
   }
@@ -852,5 +795,3 @@ void initSensors() {
 
   xTaskCreate( sensorWorker100HzPoller, "sensorWorker100HzPoller", 8192 * 2, NULL, 6, NULL );
 }
-
-

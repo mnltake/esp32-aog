@@ -1,14 +1,14 @@
 #include <stdint.h>
-#include <string>
-#include "io_provider.cpp"
+#include <Arduino.h>
+#include "io_provider.hpp"
 #include "main.hpp"
+#include "io_provider_fxl6408.hpp"
 
-class IoProvider_FXL6408 : public IoProvider {
-public:
-  IoProvider_FXL6408(uint8_t address) {
+
+  IoProvider_FXL6408::IoProvider_FXL6408(uint8_t address) {
     i2cAddress = address;
   }
-  bool init() {
+  bool IoProvider_FXL6408::init() {
     int returnValues = 0;
     returnValues += setByteI2C(0x07, 0b11111111); // Output High-Z (not driven)
     returnValues += setByteI2C(0x03, 0b11111111); // Everything Output
@@ -19,7 +19,7 @@ public:
   }
 
   // configure a port, default nothing enabled
-  bool configureAsDigitalInput(uint8_t port, bool usePullUpDown, bool pullDirectionUp) {
+  bool IoProvider_FXL6408::configureAsDigitalInput(uint8_t port, bool usePullUpDown, bool pullDirectionUp) {
     if (configuration[port] != unconfigured) {
       return false;
     }
@@ -36,7 +36,7 @@ public:
     return returnValues == 0;
   }
 
-  bool configureAsDigitalOutput(uint8_t port) {
+  bool IoProvider_FXL6408::configureAsDigitalOutput(uint8_t port) {
     if (configuration[port] != unconfigured) {
       return false;
     }
@@ -54,20 +54,18 @@ public:
     return returnValues == 0;
   }
 
-  bool getDigitalInput(uint8_t port)  {
+  bool IoProvider_FXL6408::getDigitalInput(uint8_t port)  {
     uint8_t value = getByteI2C(0xF);
     value = (value >> port) & 1; // shift so the port is at last bit, then mask
     return value == 1;
   }
 
-  void setDigitalOutput(uint8_t port, bool state) {
+  void IoProvider_FXL6408::setDigitalOutput(uint8_t port, bool state) {
     outputRegister = setBit(outputRegister, port, state);
     setByteI2C(0x05, outputRegister);
   };
 
-private:
-  uint8_t outputRegister = 0;
-  uint8_t getByteI2C(int i2cregister) {
+  uint8_t IoProvider_FXL6408::getByteI2C(int i2cregister) {
     uint8_t result;
     if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
       Wire.beginTransmission(i2cAddress);
@@ -80,7 +78,7 @@ private:
     return result;
   }
 
-  uint8_t setByteI2C(byte i2cregister, byte value) {
+  uint8_t IoProvider_FXL6408::setByteI2C(byte i2cregister, byte value) {
     uint8_t result = 255;
     if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
       Wire.beginTransmission(i2cAddress);
@@ -92,7 +90,7 @@ private:
     return result;
   }
 
-uint8_t setBit(uint8_t byte, uint8_t position, bool value) {
+uint8_t IoProvider_FXL6408::setBit(uint8_t byte, uint8_t position, bool value) {
   uint8_t pattern = 0b00000001 << position;
   if (value) {
     return byte | pattern;
@@ -102,15 +100,4 @@ uint8_t setBit(uint8_t byte, uint8_t position, bool value) {
   }
 }
 
-  uint8_t i2cAddress;
-  std::string getName() const {return "FXL6408"; }
-  const portDefinition ports[32] = {
-    {"GPIO 0", true, false, true, false, false},
-    {"GPIO 1", true, false, true, false, false},
-    {"GPIO 2", true, false, true, false, false},
-    {"GPIO 3", true, false, true, false, false},
-    {"GPIO 4", true, false, true, false, false},
-    {"GPIO 5", true, false, true, false, false},
-    {"GPIO 6", true, false, true, false, false},
-    {"GPIO 7", true, false, true, false, false}};
-};
+  String IoProvider_FXL6408::getName() const {return "FXL6408"; }

@@ -19,6 +19,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+#pragma once
 
 #include <WiFi.h>
 #include <WiFiMulti.h>
@@ -34,6 +35,7 @@
 #include <Adafruit_BNO055.h>
 
 #include "average.hpp"
+#include "io_access.hpp"
 
 #ifndef MAIN_HPP
 #define MAIN_HPP
@@ -53,50 +55,24 @@ extern uint16_t labelStatusNtrip;
 
 extern SemaphoreHandle_t i2cMutex;
 
+struct ioInterface {
+  IoProviders provider;
+  uint8_t options;
+};
+
 ///////////////////////////////////////////////////////////////////////////
 // Configuration
 ///////////////////////////////////////////////////////////////////////////
 
 struct SteerConfig {
 
-  enum class Gpio : int8_t {
-    Default     = -1,
-    None        = 0,
-    Esp32Gpio4  = 4,
-    Esp32Gpio5  = 5,
-    Esp32Gpio12 = 12,
-    Esp32Gpio13 = 13,
-    Esp32Gpio14 = 14,
-    Esp32Gpio15 = 15,
-    Esp32Gpio21 = 21,
-    Esp32Gpio22 = 22,
-    Esp32Gpio23 = 23,
-    Esp32Gpio25 = 25,
-    Esp32Gpio26 = 26,
-    Esp32Gpio27 = 27,
-    Esp32Gpio32 = 32,
-    Esp32Gpio33 = 33,
-    Esp32Gpio34 = 34,
-    Esp32Gpio35 = 35,
-    Esp32Gpio36 = 36,
-    Esp32Gpio39 = 39
-  };
 
-  enum class AnalogIn : uint8_t {
-    None                    = 0,
-    Esp32GpioA2             = 2,
-    Esp32GpioA3             = 3,
-    Esp32GpioA4             = 4,
-    Esp32GpioA7             = 7,
-    Esp32GpioA9             = 9,
-    Esp32GpioA12            = 12,
-    ADS1115A0Single         = 100,
-    ADS1115A1Single         = 101,
-    ADS1115A2Single         = 102,
-    ADS1115A3Single         = 103,
-    ADS1115A0A1Differential = 200,
-    ADS1115A2A3Differential = 202
-  };
+  ioInterface ioInterfaces[8] = {{IoProviders::ESP32_IO,0}};
+
+  uint8_t enterSetupTimeout = 30; // Enter setup hotspot after unsuccessfull
+                                  // connecting to the configured network (seconds)
+                                  // value 0 disbales timeout mechanism
+  uint8_t setupInputPort = 255;   // if this input is pulled to gnd during startup, enter setup
 
   char ssid[24] = "AOG";
   char password[24] = "aogaogaog";
@@ -116,9 +92,9 @@ struct SteerConfig {
 
   uint16_t pwmFrequency = 1000;
   bool invertOutput = false;
-  SteerConfig::Gpio gpioPwm = SteerConfig::Gpio::Esp32Gpio15;
-  SteerConfig::Gpio gpioDir = SteerConfig::Gpio::Esp32Gpio32;
-  SteerConfig::Gpio gpioEn = SteerConfig::Gpio::Esp32Gpio14;
+  uint8_t gpioPwm = 255;
+  uint8_t gpioDir = 255;
+  uint8_t gpioEn = 255;
 
   bool allowPidOverwrite = false;
   double steeringPidKp = 20;
@@ -140,8 +116,8 @@ struct SteerConfig {
     FrontPtoRpm,
     MotorRpm
   } workswitchType = WorkswitchType::None;
-  SteerConfig::Gpio gpioWorkswitch = SteerConfig::Gpio::None;
-  SteerConfig::Gpio gpioSteerswitch = SteerConfig::Gpio::None;
+  uint8_t gpioWorkswitch = 255;
+  uint8_t gpioSteerswitch = 255;
   uint16_t autoRecogniseSteerGpioAsSwitchOrButton = 500;
   bool workswitchActiveLow = true;
   bool steerswitchActiveLow = true;
@@ -151,7 +127,7 @@ struct SteerConfig {
     TieRodDisplacement
   } wheelAngleSensorType = WheelAngleSensorType::WheelAngle;
 
-  SteerConfig::AnalogIn wheelAngleInput = SteerConfig::AnalogIn::None;
+  uint8_t wheelAngleInput = 255;
 
   bool allowWheelAngleCenterAndCountsOverwrite = false;
   bool invertWheelAngleSensor = false;
@@ -167,13 +143,13 @@ struct SteerConfig {
   float wheelAngleTrackArmLenght = 165;
 
   bool steeringWheelEncoder = false;
-  SteerConfig::Gpio gpioWheelencoderA = SteerConfig::Gpio::None;
-  SteerConfig::Gpio gpioWheelencoderB = SteerConfig::Gpio::None;
+  uint8_t gpioWheelencoderA = 255;
+  uint8_t gpioWheelencoderB = 255;
 
   uint8_t wheelEncoderPulseCountMax = 3;
 
-  SteerConfig::Gpio gpioSDA = SteerConfig::Gpio::Esp32Gpio23;
-  SteerConfig::Gpio gpioSCL = SteerConfig::Gpio::Esp32Gpio22;
+  uint8_t gpioSDA = 255;
+  uint8_t gpioSCL = 255;
   uint32_t i2cBusSpeed = 400000;
   enum class ImuType : uint8_t {
     None = 0,
@@ -195,8 +171,8 @@ struct SteerConfig {
   float mountCorrectionImuYaw = 0;
 
   bool canBusEnabled = false;
-  SteerConfig::Gpio canBusRx = SteerConfig::Gpio::Esp32Gpio26;
-  SteerConfig::Gpio canBusTx = SteerConfig::Gpio::Esp32Gpio25;
+  uint8_t canBusRx = 255;
+  uint8_t canBusTx = 255;
   enum class CanBusSpeed : uint16_t {
     Speed250kbs = 250,
     Speed500kbs = 500
@@ -292,7 +268,7 @@ extern Fxos8700Fxas21002CalibrationData fxos8700Fxas21002CalibrationData;
 
 struct Initialisation {
   SteerConfig::OutputType outputType = SteerConfig::OutputType::None;
-  SteerConfig::AnalogIn wheelAngleInput = SteerConfig::AnalogIn::None;
+  uint8_t wheelAngleInput = 255;
   SteerConfig::ImuType imuType = SteerConfig::ImuType::None;
   SteerConfig::InclinoType inclinoType = SteerConfig::InclinoType::None;
 

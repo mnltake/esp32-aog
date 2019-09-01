@@ -1,15 +1,15 @@
 #include <stdint.h>
-#include <string>
-#include "io_provider.cpp"
+#include <Arduino.h>
+#include "io_provider.hpp"
+#include "io_provider_ads1115.hpp"
 #include <Adafruit_ADS1015.h>
 #include "main.hpp"
 
-class IoProvider_ADS115 : public IoProvider {
-public:
-  IoProvider_ADS115(uint8_t address) {
+
+  IoProvider_ADS115::IoProvider_ADS115(uint8_t address) {
     i2cAddress = address;
   }
-  bool init() {
+  bool IoProvider_ADS115::init() {
     if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
       ads = Adafruit_ADS1115( i2cAddress );
       ads.setGain( GAIN_TWOTHIRDS );
@@ -21,7 +21,7 @@ public:
     return false;
   }
 
-  bool configureAsAnalogInput(uint8_t port) {
+  bool IoProvider_ADS115::configureAsAnalogInput(uint8_t port) {
     if (configuration[port] != unconfigured) {
       return false;
     }
@@ -45,7 +45,7 @@ public:
     }
   }
 
-  int getAnalogInput(uint8_t port) {
+  int IoProvider_ADS115::getAnalogInput(uint8_t port) {
     int result = INT_MAX;
     if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
       switch (port) {
@@ -64,19 +64,8 @@ public:
     }
     return result;;
   }
-  float getAnalogInputScaled(uint8_t port) {
+  float IoProvider_ADS115::getAnalogInputScaled(uint8_t port) {
     return (float)getAnalogInput(port) / INT16_MAX; //Int 16 signed ...
   }
 
-private:
-  uint8_t i2cAddress;
-  std::string getName() const {return "ADS1115"; }
-  Adafruit_ADS1115 ads = Adafruit_ADS1115();
-  const portDefinition ports[32] = {
-    {"Single 0", false, true, false, false, false},
-    {"Single  1", false, true, false, false, false},
-    {"Single  2", false, true, false, false, false},
-    {"Single  3", false, true, false, false, false},
-    {"Differential 0-1", false, true, false, false, false},
-    {"Differential 2-3", false, true, false, false, false}};
-};
+  String IoProvider_ADS115::getName() const {return "ADS1115"; }
