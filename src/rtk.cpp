@@ -95,7 +95,6 @@ void nmeaWorker( void* z ) {
 
   for ( ;; ) {
     uint16_t cnt = Serial2.available();
-
     if ( cnt > sizeof( receiveBuffer ) ) {
       cnt = sizeof( receiveBuffer );
     }
@@ -103,7 +102,6 @@ void nmeaWorker( void* z ) {
     for ( uint16_t i = 0; i < cnt; i++ ) {
       receiveBuffer[i] = Serial2.read();
     }
-
     // send sentence to all connected clients on the TCP-Socket
     for ( auto client = clients.begin() ; client != clients.end(); ++client ) {
       // reply to client
@@ -120,7 +118,6 @@ void nmeaWorker( void* z ) {
         if ( strcmp( nmea.getMessageID(), "GGA" ) == 0 ) {
           lastGN = nmea.getSentence();
         }
-
         if ( steerConfig.sendNmeaDataTo != SteerConfig::SendNmeaDataTo::None ) {
 
           sentence = nmea.getSentence();
@@ -154,20 +151,21 @@ void nmeaWorker( void* z ) {
             }
             break;
 
-            case SteerConfig::SendNmeaDataTo::Serial: {
+            case SteerConfig::SendNmeaDataTo::USB: {
               Serial.print( millis() );
               Serial.print( ": " );
               Serial.print( sentence );
             }
             break;
 
-            case SteerConfig::SendNmeaDataTo::Serial1: {
+            case SteerConfig::SendNmeaDataTo::RS232: {
               Serial1.print( sentence );
             }
             break;
 
-            case SteerConfig::SendNmeaDataTo::Serial2: {
-              Serial2.print( sentence );
+            case SteerConfig::SendNmeaDataTo::UDPRS232: {
+              udpSendFrom.broadcastTo( ( uint8_t* )sentence.c_str(), ( uint16_t )sentence.length(), initialisation.portSendTo );
+              Serial1.print( sentence );
             }
             break;
 
@@ -184,11 +182,9 @@ void nmeaWorker( void* z ) {
 
     {
       static uint8_t loopCounter = 0;
-
       if ( loopCounter++ >= ( 1000 / xFrequency ) ) {
         loopCounter = 0;
         Control* handle = ESPUI.getControl( labelStatusGps );
-
         String str;
         str.reserve( 200 );
 
@@ -238,7 +234,6 @@ void nmeaWorker( void* z ) {
         ESPUI.updateControl( handle );
       }
     }
-
     vTaskDelayUntil( &xLastWakeTime, xFrequency );
   }
 }
@@ -404,8 +399,6 @@ void ntripWorker( void* z ) {
 
 
 void initRtkCorrection() {
-  Serial2.begin( steerConfig.rtkCorrectionBaudrate );
-
   if ( steerConfig.rtkCorrectionType == SteerConfig::RtkCorrectionType::Ntrip ) {
     xTaskCreate( ntripWorker, "ntripWorker", 4096, NULL, 8, NULL );
   }

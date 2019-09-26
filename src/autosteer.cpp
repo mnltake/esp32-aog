@@ -67,23 +67,10 @@ void autosteerWorker100Hz( void* z ) {
 //       Serial.print( ", " );
 //       Serial.println( steerSetpoints.distanceFromLine );
 
-      switch ( initialisation.outputType ) {
-        case SteerConfig::OutputType::HydraulicDanfoss: {
-          ledcWrite( 0, 128 );
-          ledcWrite( 1, 0 );
-        }
-        break;
-
-        default: {
-          ledcWrite( 0, 0 );
-          ledcWrite( 1, 0 );
-        }
-        break;
-      }
-
-      if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
-        digitalWrite( ( uint8_t )steerConfig.gpioEn, HIGH );
-      }
+      ledcWrite( 0, 0 ); //pwm
+      FXL6408_setDigitalOutput(6,false); // left
+      FXL6408_setDigitalOutput(7,false); // right
+      FXL6408_setDigitalOutput(5,false); // enable
     } else {
       steerSetpoints.enabled = true;
 //       Serial.println( "Autosteer enabled" );
@@ -159,61 +146,20 @@ void autosteerWorker100Hz( void* z ) {
 //           Serial.println( driveValue );
 
 
-          switch ( initialisation.outputType ) {
-            case SteerConfig::OutputType::SteeringMotorIBT2:
-            case SteerConfig::OutputType::HydraulicPwm2Coil: {
-              if ( driveValue >= 0 ) {
-                ledcWrite( 0, driveValue );
-                ledcWrite( 1, 0 );
-              }
+if ( driveValue >= 0 ) {
+  ledcWrite( 0, driveValue ); //pwm
+  FXL6408_setDigitalOutput(6,true); // left
+  FXL6408_setDigitalOutput(7,false); // right
+}
 
-              if ( driveValue < 0 ) {
-                ledcWrite( 0, 0 );
-                ledcWrite( 1, -driveValue );
-              }
-            }
-            break;
+if ( driveValue < 0 ) {
+  ledcWrite( 0, -driveValue );
+  FXL6408_setDigitalOutput(6,false); // left
+  FXL6408_setDigitalOutput(7,true); // right
+}
 
-            case SteerConfig::OutputType::SteeringMotorCytron: {
-              if ( driveValue >= 0 ) {
-                ledcWrite( 1, 255 );
-              } else {
-                ledcWrite( 0, 255 );
-                driveValue = -driveValue;
-              }
 
-              ledcWrite( 0, driveValue );
-
-              if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
-                digitalWrite( ( uint8_t )steerConfig.gpioEn, HIGH );
-              }
-            }
-            break;
-
-            case SteerConfig::OutputType::HydraulicDanfoss: {
-
-              // go from 25% on: max left, 50% on: center, 75% on: right max
-              if ( driveValue >  250 ) {
-                driveValue =  250;
-              }
-
-              if ( driveValue < -250 ) {
-                driveValue = -250;
-              }
-
-              driveValue /= 4;
-              driveValue += 128;
-              ledcWrite( 0, driveValue );
-            }
-            break;
-
-            default:
-              break;
-          }
-
-          if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
-            digitalWrite( ( uint8_t )steerConfig.gpioEn, HIGH );
-          }
+          FXL6408_setDigitalOutput(5,true); // enable
         }
 
         // our own PID schema
@@ -262,64 +208,26 @@ void autosteerWorker100Hz( void* z ) {
 //             }
 //           }
 
-          switch ( initialisation.outputType ) {
-            case SteerConfig::OutputType::SteeringMotorIBT2:
-            case SteerConfig::OutputType::HydraulicPwm2Coil: {
+
               if ( pidOutputTmp >= 0 ) {
-                ledcWrite( 0, pidOutputTmp );
-                ledcWrite( 1, 0 );
+                ledcWrite( 0, pidOutputTmp ); //pwm
+                FXL6408_setDigitalOutput(6,true); // left
+                FXL6408_setDigitalOutput(7,false); // right
               }
 
               if ( pidOutputTmp < 0 ) {
-                ledcWrite( 0, 0 );
-                ledcWrite( 1, -pidOutputTmp );
-              }
-            }
-            break;
-
-            case SteerConfig::OutputType::SteeringMotorCytron: {
-              if ( pidOutputTmp >= 0 ) {
-                ledcWrite( 1, 255 );
-              } else {
-                ledcWrite( 0, 255 );
-                pidOutputTmp = -pidOutputTmp;
+                ledcWrite( 0, -pidOutputTmp );
+                FXL6408_setDigitalOutput(6,false); // left
+                FXL6408_setDigitalOutput(7,true); // right
               }
 
-              ledcWrite( 0, pidOutputTmp );
 
-              if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
-                digitalWrite( ( uint8_t )steerConfig.gpioEn, HIGH );
-              }
-            }
-            break;
-
-            case SteerConfig::OutputType::HydraulicDanfoss: {
-
-              // go from 25% on: max left, 50% on: center, 75% on: right max
-              if ( pidOutputTmp >  250 ) {
-                pidOutputTmp =  250;
-              }
-
-              if ( pidOutputTmp < -250 ) {
-                pidOutputTmp = -250;
-              }
-
-              pidOutputTmp /= 4;
-              pidOutputTmp += 128;
-              ledcWrite( 0, pidOutputTmp );
-            }
-            break;
-
-            default:
-              break;
-          }
-
-          if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
-            digitalWrite( ( uint8_t )steerConfig.gpioEn, HIGH );
-          }
+          FXL6408_setDigitalOutput(5,true); // enable
         } else {
-          ledcWrite( 0, 0 );
-          ledcWrite( 1, 0 );
+          ledcWrite( 0, 0 ); //pwm
+          // FXL6408_setDigitalOutput(6,false); // left
+          // FXL6408_setDigitalOutput(7,false); // right
+          FXL6408_setDigitalOutput(5,false); // enable
         }
       }
     }
@@ -608,114 +516,130 @@ void initAutosteer() {
   }
 
   // init output
-  {
-    if ( steerConfig.gpioPwm != SteerConfig::Gpio::None ) {
-      pinMode( ( uint8_t )steerConfig.gpioPwm, OUTPUT );
-      ledcSetup( 0, 1000/*steerConfig.pwmFrequency*/, 8 );
-      ledcAttachPin( ( uint8_t )steerConfig.gpioPwm, 0 );
-      ledcWrite( 0, 0 );
-    }
+  // {
+  //   if ( steerConfig.gpioPwm != SteerConfig::Gpio::None ) {
+  //     pinMode( ( uint8_t )steerConfig.gpioPwm, OUTPUT );
+  //     ledcSetup( 0, 1000/*steerConfig.pwmFrequency*/, 8 );
+  //     ledcAttachPin( ( uint8_t )steerConfig.gpioPwm, 0 );
+  //     ledcWrite( 0, 0 );
+  //   }
+  //
+  //   if ( steerConfig.gpioDir != SteerConfig::Gpio::None ) {
+  //     pinMode( ( uint8_t )steerConfig.gpioDir, OUTPUT );
+  //     ledcSetup( 0, 1000/*steerConfig.pwmFrequency*/, 8 );
+  //     ledcAttachPin( ( uint8_t )steerConfig.gpioDir, 0 );
+  //     ledcWrite( 0, 0 );
+  //   }
+  //
+  //   if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
+  //     pinMode( ( uint8_t )steerConfig.gpioEn, OUTPUT );
+  //     digitalWrite( ( uint8_t )steerConfig.gpioEn, LOW );
+  //   }
+  //
+  //   switch ( steerConfig.outputType ) {
+  //     case SteerConfig::OutputType::SteeringMotorIBT2: {
+  //       Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
+  //
+  //       if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
+  //            steerConfig.gpioDir != SteerConfig::Gpio::None &&
+  //            steerConfig.gpioEn  != SteerConfig::Gpio::None ) {
+  //         labelStatusOutputHandle->value = "Output configured";
+  //         labelStatusOutputHandle->color = ControlColor::Emerald;
+  //         ESPUI.updateControl( labelStatusOutputHandle );
+  //
+  //         initialisation.outputType = SteerConfig::OutputType::SteeringMotorIBT2;
+  //       } else {
+  //         {
+  //           labelStatusOutputHandle->value = "GPIOs not correctly defined";
+  //           labelStatusOutputHandle->color = ControlColor::Carrot;
+  //           ESPUI.updateControl( labelStatusOutputHandle );
+  //         }
+  //       }
+  //     }
+  //     break;
+  //
+  //     case SteerConfig::OutputType::SteeringMotorCytron: {
+  //       Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
+  //
+  //       if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
+  //            steerConfig.gpioDir != SteerConfig::Gpio::None ) {
+  //         labelStatusOutputHandle->value = "Output configured";
+  //         labelStatusOutputHandle->color = ControlColor::Emerald;
+  //         ESPUI.updateControl( labelStatusOutputHandle );
+  //
+  //         initialisation.outputType = SteerConfig::OutputType::SteeringMotorCytron;
+  //       } else {
+  //         {
+  //           labelStatusOutputHandle->value = "GPIOs not correctly defined";
+  //           labelStatusOutputHandle->color = ControlColor::Carrot;
+  //           ESPUI.updateControl( labelStatusOutputHandle );
+  //         }
+  //       }
+  //     }
+  //     break;
+  //
+  //     case SteerConfig::OutputType::HydraulicPwm2Coil: {
+  //       Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
+  //
+  //       if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
+  //            steerConfig.gpioDir != SteerConfig::Gpio::None ) {
+  //         labelStatusOutputHandle->value = "Output configured";
+  //         labelStatusOutputHandle->color = ControlColor::Emerald;
+  //         ESPUI.updateControl( labelStatusOutputHandle );
+  //
+  //         initialisation.outputType = SteerConfig::OutputType::HydraulicPwm2Coil;
+  //       } else {
+  //         {
+  //           labelStatusOutputHandle->value = "GPIOs not correctly defined";
+  //           labelStatusOutputHandle->color = ControlColor::Carrot;
+  //           ESPUI.updateControl( labelStatusOutputHandle );
+  //         }
+  //       }
+  //     }
+  //     break;
+  //
+  //     case SteerConfig::OutputType::HydraulicDanfoss: {
+  //       Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
+  //
+  //       if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
+  //            steerConfig.gpioDir != SteerConfig::Gpio::None ) {
+  //         labelStatusOutputHandle->value = "Output configured";
+  //         labelStatusOutputHandle->color = ControlColor::Emerald;
+  //         ESPUI.updateControl( labelStatusOutputHandle );
+  //
+  //         initialisation.outputType = SteerConfig::OutputType::HydraulicDanfoss;
+  //       } else {
+  //         {
+  //           labelStatusOutputHandle->value = "GPIOs not correctly defined";
+  //           labelStatusOutputHandle->color = ControlColor::Carrot;
+  //           ESPUI.updateControl( labelStatusOutputHandle );
+  //         }
+  //       }
+  //     }
+  //     break;
+  //
+  //     default:
+  //       break;
+  //
+  //   }
 
-    if ( steerConfig.gpioDir != SteerConfig::Gpio::None ) {
-      pinMode( ( uint8_t )steerConfig.gpioDir, OUTPUT );
-      ledcSetup( 0, 1000/*steerConfig.pwmFrequency*/, 8 );
-      ledcAttachPin( ( uint8_t )steerConfig.gpioDir, 0 );
-      ledcWrite( 0, 0 );
-    }
+  // PWM
+  ledcSetup( 0, steerConfig.pwmFrequency, 8 );
+  ledcAttachPin( 4, 0 );
+  ledcWrite( 0, 0 );
+  // direction
+  FXL6408_configureAsDigitalOutput(5);
+  FXL6408_configureAsDigitalOutput(6);
+  FXL6408_configureAsDigitalOutput(7);
+  FXL6408_setDigitalOutput(6,false); // left
+  FXL6408_setDigitalOutput(7,false); // right
+  FXL6408_setDigitalOutput(5,false); // enable
 
-    if ( steerConfig.gpioEn != SteerConfig::Gpio::None ) {
-      pinMode( ( uint8_t )steerConfig.gpioEn, OUTPUT );
-      digitalWrite( ( uint8_t )steerConfig.gpioEn, LOW );
-    }
+  Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
+  labelStatusOutputHandle->value = "Output configured";
+  labelStatusOutputHandle->color = ControlColor::Emerald;
+  ESPUI.updateControl( labelStatusOutputHandle );
 
-    switch ( steerConfig.outputType ) {
-      case SteerConfig::OutputType::SteeringMotorIBT2: {
-        Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
-
-        if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
-             steerConfig.gpioDir != SteerConfig::Gpio::None &&
-             steerConfig.gpioEn  != SteerConfig::Gpio::None ) {
-          labelStatusOutputHandle->value = "Output configured";
-          labelStatusOutputHandle->color = ControlColor::Emerald;
-          ESPUI.updateControl( labelStatusOutputHandle );
-
-          initialisation.outputType = SteerConfig::OutputType::SteeringMotorIBT2;
-        } else {
-          {
-            labelStatusOutputHandle->value = "GPIOs not correctly defined";
-            labelStatusOutputHandle->color = ControlColor::Carrot;
-            ESPUI.updateControl( labelStatusOutputHandle );
-          }
-        }
-      }
-      break;
-
-      case SteerConfig::OutputType::SteeringMotorCytron: {
-        Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
-
-        if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
-             steerConfig.gpioDir != SteerConfig::Gpio::None ) {
-          labelStatusOutputHandle->value = "Output configured";
-          labelStatusOutputHandle->color = ControlColor::Emerald;
-          ESPUI.updateControl( labelStatusOutputHandle );
-
-          initialisation.outputType = SteerConfig::OutputType::SteeringMotorCytron;
-        } else {
-          {
-            labelStatusOutputHandle->value = "GPIOs not correctly defined";
-            labelStatusOutputHandle->color = ControlColor::Carrot;
-            ESPUI.updateControl( labelStatusOutputHandle );
-          }
-        }
-      }
-      break;
-
-      case SteerConfig::OutputType::HydraulicPwm2Coil: {
-        Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
-
-        if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
-             steerConfig.gpioDir != SteerConfig::Gpio::None ) {
-          labelStatusOutputHandle->value = "Output configured";
-          labelStatusOutputHandle->color = ControlColor::Emerald;
-          ESPUI.updateControl( labelStatusOutputHandle );
-
-          initialisation.outputType = SteerConfig::OutputType::HydraulicPwm2Coil;
-        } else {
-          {
-            labelStatusOutputHandle->value = "GPIOs not correctly defined";
-            labelStatusOutputHandle->color = ControlColor::Carrot;
-            ESPUI.updateControl( labelStatusOutputHandle );
-          }
-        }
-      }
-      break;
-
-      case SteerConfig::OutputType::HydraulicDanfoss: {
-        Control* labelStatusOutputHandle = ESPUI.getControl( labelStatusOutput );
-
-        if ( steerConfig.gpioPwm != SteerConfig::Gpio::None &&
-             steerConfig.gpioDir != SteerConfig::Gpio::None ) {
-          labelStatusOutputHandle->value = "Output configured";
-          labelStatusOutputHandle->color = ControlColor::Emerald;
-          ESPUI.updateControl( labelStatusOutputHandle );
-
-          initialisation.outputType = SteerConfig::OutputType::HydraulicDanfoss;
-        } else {
-          {
-            labelStatusOutputHandle->value = "GPIOs not correctly defined";
-            labelStatusOutputHandle->color = ControlColor::Carrot;
-            ESPUI.updateControl( labelStatusOutputHandle );
-          }
-        }
-      }
-      break;
-
-      default:
-        break;
-
-    }
-
-  }
 
   if ( steerConfig.gpioWorkswitch != SteerConfig::Gpio::None ) {
     pinMode( ( uint8_t )steerConfig.gpioWorkswitch, INPUT_PULLUP );
@@ -732,6 +656,3 @@ void initAutosteer() {
 
   xTaskCreate( autosteerWorker100Hz, "autosteerWorker", 4096, NULL, 3, NULL );
 }
-
-
-

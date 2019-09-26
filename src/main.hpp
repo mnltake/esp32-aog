@@ -51,6 +51,9 @@ extern uint16_t labelStatusInclino;
 extern uint16_t labelStatusGps;
 extern uint16_t labelStatusNtrip;
 
+extern uint32_t statusLedPattern;
+extern uint8_t fxl6408_outputRegister;
+
 extern SemaphoreHandle_t i2cMutex;
 
 ///////////////////////////////////////////////////////////////////////////
@@ -98,9 +101,14 @@ struct SteerConfig {
     ADS1115A2A3Differential = 202
   };
 
-  char ssid[24] = "AOG";
-  char password[24] = "aogaogaog";
-  char hostname[24] = "ESP32-AOG";
+  enum class NetworkType : uint8_t {
+    WiFi,
+    Cable
+  } networkType = NetworkType::WiFi;
+
+  char ssid[24] = "AgOpen";
+  char password[24] = "wifiConnection";
+  char hostname[24] = "ESP-AOG";
 
   //set to 1  if you want to use Steering Motor + Cytron MD30C Driver
   //set to 2  if you want to use Steering Motor + IBT 2  Driver
@@ -111,14 +119,17 @@ struct SteerConfig {
     SteeringMotorCytron = 1,
     SteeringMotorIBT2,
     HydraulicPwm2Coil,
-    HydraulicDanfoss
+    HydraulicDanfoss,
+    SteeringMotorVNH7070AS,
+    HydraulicPwm2CoilVNH7070AS,
+    HydraulicDanfossVNH7070AS
   } outputType = OutputType::None;
 
-  uint16_t pwmFrequency = 1000;
+  uint16_t pwmFrequency = 12000;
   bool invertOutput = false;
-  SteerConfig::Gpio gpioPwm = SteerConfig::Gpio::Esp32Gpio15;
-  SteerConfig::Gpio gpioDir = SteerConfig::Gpio::Esp32Gpio32;
-  SteerConfig::Gpio gpioEn = SteerConfig::Gpio::Esp32Gpio14;
+  SteerConfig::Gpio gpioPwm = SteerConfig::Gpio::Esp32Gpio4;
+  SteerConfig::Gpio gpioDir = SteerConfig::Gpio::None;
+  SteerConfig::Gpio gpioEn = SteerConfig::Gpio::None;
 
   bool allowPidOverwrite = false;
   double steeringPidKp = 20;
@@ -151,12 +162,12 @@ struct SteerConfig {
     TieRodDisplacement
   } wheelAngleSensorType = WheelAngleSensorType::WheelAngle;
 
-  SteerConfig::AnalogIn wheelAngleInput = SteerConfig::AnalogIn::None;
+  SteerConfig::AnalogIn wheelAngleInput = SteerConfig::AnalogIn::ADS1115A2Single;
 
   bool allowWheelAngleCenterAndCountsOverwrite = false;
   bool invertWheelAngleSensor = false;
-  float wheelAngleCountsPerDegree = 118;
-  uint16_t wheelAnglePositionZero = 5450;
+  float wheelAngleCountsPerDegree = 380;
+  uint16_t wheelAnglePositionZero = 13450;
 
   float wheelAngleOffset = 0;
 
@@ -172,21 +183,23 @@ struct SteerConfig {
 
   uint8_t wheelEncoderPulseCountMax = 3;
 
-  SteerConfig::Gpio gpioSDA = SteerConfig::Gpio::Esp32Gpio23;
-  SteerConfig::Gpio gpioSCL = SteerConfig::Gpio::Esp32Gpio22;
+  SteerConfig::Gpio gpioSDA = SteerConfig::Gpio::Esp32Gpio32;
+  SteerConfig::Gpio gpioSCL = SteerConfig::Gpio::Esp32Gpio33;
   uint32_t i2cBusSpeed = 400000;
   enum class ImuType : uint8_t {
     None = 0,
     BNO055 = 1,
-    Fxos8700Fxas21002
-  } imuType = ImuType::None;
+    Fxos8700Fxas21002,
+    LSM9DS1
+  } imuType = ImuType::LSM9DS1;
 
   enum class InclinoType : uint8_t {
     None = 0,
     MMA8451 = 1,
     DOGS2,
-    Fxos8700Fxas21002
-  } inclinoType = InclinoType::None;
+    Fxos8700Fxas21002,
+    LSM9DS1
+  } inclinoType = InclinoType::LSM9DS1;
 
   bool invertRoll = false;
 
@@ -195,8 +208,8 @@ struct SteerConfig {
   float mountCorrectionImuYaw = 0;
 
   bool canBusEnabled = false;
-  SteerConfig::Gpio canBusRx = SteerConfig::Gpio::Esp32Gpio26;
-  SteerConfig::Gpio canBusTx = SteerConfig::Gpio::Esp32Gpio25;
+  SteerConfig::Gpio canBusRx = SteerConfig::Gpio::Esp32Gpio35;
+  SteerConfig::Gpio canBusTx = SteerConfig::Gpio::Esp32Gpio5;
   enum class CanBusSpeed : uint16_t {
     Speed250kbs = 250,
     Speed500kbs = 500
@@ -215,12 +228,11 @@ struct SteerConfig {
     tcp
   } rtkCorrectionType = RtkCorrectionType::None;
 
-  char rtkCorrectionServer[48] = "example.com";
+  char rtkCorrectionServer[48] = "hostname or ip";
   uint16_t rtkCorrectionPort = 2101;
-  char rtkCorrectionUsername[24] = "gps";
-  char rtkCorrectionPassword[24] = "gps";
-  char rtkCorrectionMountpoint[24] = "STALL";
-  char rtkCorrectionMountpoint2[24] = "STALL";
+  char rtkCorrectionUsername[24] = "user";
+  char rtkCorrectionPassword[24] = "password";
+  char rtkCorrectionMountpoint[24] = "mountpoint";
 
   char rtkCorrectionNmeaToSend[120] = "";
 
@@ -231,12 +243,13 @@ struct SteerConfig {
   enum class SendNmeaDataTo : uint8_t {
     None = 0,
     UDP = 1,
-    TCP,
-    Serial,
+    USB = 2,
+    RS232 = 4,
+    UDPRS232 = 5,
     Serial1,
     Serial2,
     Bluetooth
-  } sendNmeaDataTo = SendNmeaDataTo::None;
+  } sendNmeaDataTo = SendNmeaDataTo::UDPRS232;
 
   uint16_t sendNmeaDataTcpPort = 0;
 
@@ -323,7 +336,7 @@ struct SteerSettings {
   float Kp = 0.0f;  //proportional gain
   float Ki = 0.0f;//integral gain
   float Kd = 0.0f;  //derivative gain
-  uint8_t minPWMValue = 10;
+  uint8_t minPWMValue = 15;
   int maxIntegralValue = 20; //max PWM value for integral PID component
   float wheelAngleCountsPerDegree = 118;
   uint16_t wheelAnglePositionZero = 0;
@@ -422,5 +435,14 @@ extern void calculateMountingCorrection();
 extern void initRtkCorrection();
 extern void initCan();
 extern void initAutosteer();
+
+extern bool FXL6408_init();
+extern bool FXL6408_configureAsDigitalInput(uint8_t port, bool usePullUpDown, bool pullDirectionUp);
+extern bool FXL6408_configureAsDigitalOutput(uint8_t port);
+extern bool FXL6408_getDigitalInput(uint8_t port);
+extern void FXL6408_setDigitalOutput(uint8_t port, bool state);
+extern uint8_t FXL6408_getByteI2C(int i2cregister);
+extern uint8_t FXL6408_setByteI2C(int i2cregister, byte value) ;
+extern uint8_t FXL6408_setBit(uint8_t byte, uint8_t position, bool value) ;
 
 #endif
