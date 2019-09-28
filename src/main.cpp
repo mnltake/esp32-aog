@@ -322,8 +322,6 @@ gpio_set_pull_mode(GPIO_NUM_13, GPIO_FLOATING);
   Serial.println( WiFi.getMode() == WIFI_AP ? WiFi.softAPIP() : WiFi.localIP() );
 
 
-  steerImuInclinometerData.sendCalibrationDataFromImu = false;
-
   labelLoad       = ESPUI.addControl( ControlType::Label, "Load:", "", ControlColor::Turquoise );
   labelOrientation = ESPUI.addControl( ControlType::Label, "Orientation:", "", ControlColor::Emerald );
   labelWheelAngle = ESPUI.addControl( ControlType::Label, "Wheel Angle:", "0°", ControlColor::Emerald );
@@ -802,12 +800,25 @@ gpio_set_pull_mode(GPIO_NUM_13, GPIO_FLOATING);
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "No IMU", "0", ControlColor::Alizarin, sel );
+      ESPUI.addControl( ControlType::Option, "Fxos8700Fxas21002", "2", ControlColor::Alizarin, sel );
       ESPUI.addControl( ControlType::Option, "LSM9DS1", "3", ControlColor::Alizarin, sel );
     }
-    {
-      ESPUI.addControl( ControlType::Switcher, "Send Calibration Data from IMU to USB", steerImuInclinometerData.sendCalibrationDataFromImu ? "1" : "0", ControlColor::Peterriver, tab,
+    { // calibrate gyros
+      ESPUI.addControl( ControlType::Button, "Gyro calibration (30s)", "Start", ControlColor::Peterriver, tab,
       []( Control * control, int id ) {
-        steerImuInclinometerData.sendCalibrationDataFromImu = control->value.toInt() == 1;
+        if ( id == B_UP ) {
+          steerImuInclinometerData.gyroCalibration = true;
+        }
+      } );
+    }
+
+    {
+      ESPUI.addControl( ControlType::Switcher, "MagnetometerCalibration", steerImuInclinometerData.magCalibration ? "1" : "0", ControlColor::Peterriver, tab,
+      []( Control * control, int id ) {
+        if (control->value.toInt() == 0 && steerImuInclinometerData.magCalibration){
+          genericImuCalibrationCalcMagnetometer();
+        }
+        steerImuInclinometerData.magCalibration = control->value.toInt() == 1;
       } );
     }
 
@@ -818,7 +829,9 @@ gpio_set_pull_mode(GPIO_NUM_13, GPIO_FLOATING);
         setResetButtonToRed();
       } );
       ESPUI.addControl( ControlType::Option, "No Inclinometer", "0", ControlColor::Alizarin, sel );
-      ESPUI.addControl( ControlType::Option, "LSM9DS1", "4", ControlColor::Alizarin, sel );
+      ESPUI.addControl( ControlType::Option, "MMA8451", "1", ControlColor::Alizarin, sel );
+      ESPUI.addControl( ControlType::Option, "Fxos8700Fxas21002", "2", ControlColor::Alizarin, sel );
+      ESPUI.addControl( ControlType::Option, "LSM9DS1", "3", ControlColor::Alizarin, sel );
     }
 
     {

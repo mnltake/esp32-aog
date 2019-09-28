@@ -56,6 +56,10 @@ Adafruit_FXAS21002C fxas2100 = Adafruit_FXAS21002C( 0x0021002C );
 Adafruit_FXOS8700 fxos8700 = Adafruit_FXOS8700( 0x8700A, 0x8700B );
 LSM9DS1 lsm9ds1;
 
+// for imu calibration
+float magCalData[3][2] = {{32767, -32767}, {32767, -32767}, {32767, -32767}};
+float gyroCalData[3] = {0, 0, 0};
+
 Adafruit_ADS1115 ads = Adafruit_ADS1115( 0x48 );
 
 Madgwick ahrs;
@@ -115,6 +119,42 @@ class  FilterBuLp2_3 {
         + 2 * v[1];
     }
 } wheelAngleSensorFilter;
+
+void genericImuCalibrationCalcMagnetometer() {
+  //disable further updates
+  steerImuInclinometerData.magCalibration;
+
+  // calibration after https://appelsiini.net/2018/calibrate-magnetometer/
+  // calculate hard iron compensation
+  genericimucalibrationdata.mag_hardiron[0] = (magCalData[0][0] + magCalData[0][1]) / 2;
+  genericimucalibrationdata.mag_hardiron[1] = (magCalData[1][0] + magCalData[1][1]) / 2;
+  genericimucalibrationdata.mag_hardiron[2] = (magCalData[2][0] + magCalData[2][1]) / 2;
+
+  // apply the hard iron correction on the raw data
+  magCalData[0][0] -= genericimucalibrationdata.mag_hardiron[0];
+  magCalData[1][0] -= genericimucalibrationdata.mag_hardiron[1];
+  magCalData[2][0] -= genericimucalibrationdata.mag_hardiron[2];
+  magCalData[0][1] -= genericimucalibrationdata.mag_hardiron[0];
+  magCalData[1][1] -= genericimucalibrationdata.mag_hardiron[1];
+  magCalData[2][1] -= genericimucalibrationdata.mag_hardiron[2];
+
+  // calculate soft iron data
+  genericimucalibrationdata.mag_softiron[0] = (magCalData[0][1] - magCalData[0][0]) / 2;
+  genericimucalibrationdata.mag_softiron[1] = (magCalData[1][1] - magCalData[1][0]) / 2;
+  genericimucalibrationdata.mag_softiron[2] = (magCalData[2][1] - magCalData[2][0]) / 2;
+
+  float avgDelta = (genericimucalibrationdata.mag_softiron[0] + genericimucalibrationdata.mag_softiron[1] + genericimucalibrationdata.mag_softiron[2]) / 3;
+
+  genericimucalibrationdata.mag_softiron[0] = avgDelta / genericimucalibrationdata.mag_softiron[0];
+
+  // reset magCalData for next run
+  magCalData[0][0] = 32767;
+  magCalData[0][1] = -32767;
+  magCalData[1][0] = 32767;
+  magCalData[1][1] = -32767;
+  magCalData[2][0] = 32767;
+  magCalData[2][1] = -32767;
+}
 
 void calculateMountingCorrection() {
   // rotate by the correction, relative to the tracot axis
@@ -210,6 +250,48 @@ void sensorWorkerLsmPoller( void* z ) {
 
 void updateImuData(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz) {
   // TODO: collection if calibration is enabled
+  static float imuGyroSumX, imuGyroSumY, imuGyroSumZ;
+
+  // calibration if requested
+  { // gyros
+    static uint16_t loopCounter = 0;
+    if (steerImuInclinometerData.gyroCalibration) {
+      gyroCalData[0] += gx;
+      gyroCalData[1] += gy;
+      gyroCalData[2] += gz;
+      if (loopCounter == 1023) { //enough data
+        genericimucalibrationdata.gyro_zero_offsets[0] = gyroCalData[0]/1024;
+        genericimucalibrationdata.gyro_zero_offsets[1] = gyroCalData[1]/1024;
+        genericimucalibrationdata.gyro_zero_offsets[2] = gyroCalData[2]/1024;
+        loopCounter = 0;
+        steerImuInclinometerData.gyroCalibration = false;
+      } else {
+        loopCounter++;
+      }
+    }
+  }
+  { // magnetometer
+    if (steerImuInclinometerData.magCalibration) {
+      if (mx < magCalData[0][0]) {
+        magCalData[0][0] = mx;
+      }
+      if (mx > magCalData[0][1]) {
+        magCalData[0][1] = mx;
+      }
+      if (my < magCalData[1][0]) {
+        magCalData[1][0] = my;
+      }
+      if (my > magCalData[1][1]) {
+        magCalData[1][1] = my;
+      }
+      if (mz < magCalData[1][0]) {
+        magCalData[2][0] = mz;
+      }
+      if (mz > magCalData[1][1]) {
+        magCalData[2][1] = mz;
+      }
+    }
+  }
 
   // Apply mag compensation
   mx = (mx - genericimucalibrationdata.mag_hardiron[0]) * genericimucalibrationdata.mag_softiron[0];
@@ -615,8 +697,13 @@ void initSensors() {
     // 1 = single-conversion
     // 2 = power down
     lsm9ds1.settings.mag.operatingMode = 0;
+    bool lsm9ds1Init = false;
+    if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
+      lsm9ds1Init = lsm9ds1.begin();
+      xSemaphoreGive( i2cMutex );
+    }
 
-    if ( lsm9ds1.begin() ) {
+    if ( lsm9ds1Init ) {
       if ( steerConfig.imuType == SteerConfig::ImuType::LSM9DS1 ) {
         initialisation.imuType = steerConfig.imuType;
 
@@ -643,7 +730,7 @@ void initSensors() {
         handle->color = ControlColor::Alizarin;
         ESPUI.updateControl( handle );
       }
-      if ( steerConfig.inclinoType == SteerConfig::InclinoType::Fxos8700Fxas21002 ) {
+      if ( steerConfig.inclinoType == SteerConfig::InclinoType::LSM9DS1 ) {
         initialisation.inclinoType = SteerConfig::InclinoType::None;
 
         Control* handle = ESPUI.getControl( labelStatusInclino );
@@ -677,12 +764,12 @@ void initSensors() {
     xTaskCreate( sensorWorker10HzPoller, "sensorWorker10HzPoller", 4096, NULL, 5, NULL );
   }
   if ( steerConfig.imuType == SteerConfig::ImuType::Fxos8700Fxas21002 ) {
-    xTaskCreate( sensorWorkerFxPoller, "sensorWorkerFxPoller", 8192, NULL, 5, NULL );
+    xTaskCreate( sensorWorkerFxPoller, "sensorWorkerFxPoller", 4096, NULL, 5, NULL );
   }
   if ( steerConfig.imuType == SteerConfig::ImuType::LSM9DS1) {
-    xTaskCreate( sensorWorkerLsmPoller, "sensorWorkerLsmPoller", 8192, NULL, 5, NULL );
+    xTaskCreate( sensorWorkerLsmPoller, "sensorWorkerLsmPoller", 4096, NULL, 5, NULL );
   }
 
 
-  xTaskCreate( sensorWorkerSteeringPoller, "sensorWorkerSteeringPoller", 8192 * 2, NULL, 6, NULL );
+  xTaskCreate( sensorWorkerSteeringPoller, "sensorWorkerSteeringPoller", 4096 * 2, NULL, 6, NULL );
 }

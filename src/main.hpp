@@ -190,15 +190,15 @@ struct SteerConfig {
   uint32_t i2cBusSpeed = 400000;
   enum class ImuType : uint8_t {
     None = 0,
-    Fxos8700Fxas21002,
-    LSM9DS1
+    Fxos8700Fxas21002 = 2,
+    LSM9DS1 = 3
   } imuType = ImuType::LSM9DS1;
 
   enum class InclinoType : uint8_t {
     None = 0,
     MMA8451 = 1,
-    Fxos8700Fxas21002,
-    LSM9DS1
+    Fxos8700Fxas21002 = 2,
+    LSM9DS1 = 3
   } inclinoType = InclinoType::LSM9DS1;
 
   bool invertRoll = false;
@@ -358,7 +358,8 @@ struct SteerMachineControl {
 extern SteerMachineControl steerMachineControl;
 
 struct SteerImuInclinometerData {
-  bool sendCalibrationDataFromImu = false;
+  bool gyroCalibration = false;
+  bool magCalibration = false;
 
   float heading;
   float roll;
@@ -430,4 +431,5 @@ extern uint8_t FXL6408_getByteI2C(int i2cregister);
 extern uint8_t FXL6408_setByteI2C(int i2cregister, byte value) ;
 extern uint8_t FXL6408_setBit(uint8_t byte, uint8_t position, bool value) ;
 extern void updateImuData(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz);
+extern void genericImuCalibrationCalcMagnetometer();
 #endif
