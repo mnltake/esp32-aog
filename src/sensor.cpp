@@ -36,6 +36,8 @@
 #include <Adafruit_FXAS21002C.h>
 #include <Adafruit_FXOS8700.h>
 
+#include <SparkFunLSM9DS1.h>
+
 #include <Mahony.h>
 #include <Madgwick.h>
 
@@ -52,6 +54,8 @@
 Adafruit_MMA8451 mma = Adafruit_MMA8451();
 Adafruit_FXAS21002C fxas2100 = Adafruit_FXAS21002C( 0x0021002C );
 Adafruit_FXOS8700 fxos8700 = Adafruit_FXOS8700( 0x8700A, 0x8700B );
+LSM9DS1 lsm9ds1;
+
 Adafruit_ADS1115 ads = Adafruit_ADS1115( 0x48 );
 
 Madgwick ahrs;
@@ -130,7 +134,7 @@ void calculateMountingCorrection() {
 }
 
 
-void sensorWorkerImuPoller( void* z ) {
+void sensorWorkerFxPoller( void* z ) {
   vTaskDelay( 2000 );
   constexpr TickType_t xFrequency = 10;
   TickType_t xLastWakeTime = xTaskGetTickCount();
@@ -141,111 +145,149 @@ void sensorWorkerImuPoller( void* z ) {
     float gx,gy,gz; // gyros in uTesla
     float ax,ay,az; // acceleration in g
 
-    if ( initialisation.inclinoType == SteerConfig::InclinoType::Fxos8700Fxas21002 ||
-         initialisation.imuType == SteerConfig::ImuType::Fxos8700Fxas21002 ) {
-
       sensors_event_t gyro_event, accel_event, mag_event;
 
-      // Get new data samples
-      if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
-        fxas2100.getEvent( &gyro_event );
-        fxos8700.getEvent( &accel_event, &mag_event );
-        xSemaphoreGive( i2cMutex );
-      }
-      mx = mag_event.magnetic.x;
-      my = mag_event.magnetic.y;
-      mz = mag_event.magnetic.z;
-
-      gx = degrees(gyro_event.gyro.x);
-      gy = degrees(gyro_event.gyro.y);
-      gz = degrees(gyro_event.gyro.z);
-
-      ax = accel_event.acceleration.x;
-      ay = accel_event.acceleration.y;
-      az = accel_event.acceleration.z;
+    // Get new data samples
+    if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
+      fxas2100.getEvent( &gyro_event );
+      fxos8700.getEvent( &accel_event, &mag_event );
+      xSemaphoreGive( i2cMutex );
     }
+    mx = mag_event.magnetic.x;
+    my = mag_event.magnetic.y;
+    mz = mag_event.magnetic.z;
 
-    // TODO: collection if calibration is enabled
+    gx = degrees(gyro_event.gyro.x);
+    gy = degrees(gyro_event.gyro.y);
+    gz = degrees(gyro_event.gyro.z);
 
-    // Apply mag compensation
-    mx = (mx - genericimucalibrationdata.mag_hardiron[0]) * genericimucalibrationdata.mag_softiron[0];
-    my = (my - genericimucalibrationdata.mag_hardiron[1]) * genericimucalibrationdata.mag_softiron[1];
-    mz = (mz - genericimucalibrationdata.mag_hardiron[2]) * genericimucalibrationdata.mag_softiron[2];
+    ax = accel_event.acceleration.x;
+    ay = accel_event.acceleration.y;
+    az = accel_event.acceleration.z;
 
-    // Apply gyro zero-rate error compensation
-    gx += genericimucalibrationdata.gyro_zero_offsets[0];
-    gy += genericimucalibrationdata.gyro_zero_offsets[1];
-    gz += genericimucalibrationdata.gyro_zero_offsets[2];
-
-    // input into AHRS
-    ahrs.update(
-      gx,
-      gy,
-      gz,
-
-      ax,
-      ay,
-      az,
-
-      mx,
-      my,
-      mz
-    );
-
-    float w, x, y, z;
-    ahrs.getQuaternion( &w, &x, &y, &z );
-    imu::Quaternion orientation( w, x, y, z );
-
-    // rotate by the correction
-    {
-      imu::Quaternion correction;
-      correction.fromEuler( radians( steerConfig.mountCorrectionImuRoll ),
-                            radians( steerConfig.mountCorrectionImuPitch ),
-                            radians( steerConfig.mountCorrectionImuYaw ) );
-
-      orientation = orientation * correction;
-    }
-
-    // orientation has the corrected angles in it, extract them (and correct the refrence frame)
-    {
-      imu::Vector<3> euler;
-      euler = orientation.toEuler();
-      euler.toDegrees();
-      steerImuInclinometerData.roll = euler[2];
-      steerImuInclinometerData.pitch = -euler[1];
-
-      float heading = euler[0] + 180 + 90;
-
-      while ( heading > 360 ) {
-        heading -= 360;
-      }
-
-      steerImuInclinometerData.heading = heading;
-
-    }
-
-    {
-      static uint8_t loopCounter = 0;
-
-      if ( loopCounter++ > 99 ) {
-        loopCounter = 0;
-        {
-          Control* handle = ESPUI.getControl( labelOrientation );
-          handle->value = "Roll: ";
-          handle->value += ( float )steerImuInclinometerData.roll;
-          handle->value += "°, Pitch: ";
-          handle->value += ( float )steerImuInclinometerData.pitch;
-          handle->value += "°, Heading: ";
-          handle->value += ( float )steerImuInclinometerData.heading;
-
-          ESPUI.updateControl( handle );
-        }
-      }
-    }
+     updateImuData(gy, gy, gz, ax, ay, az, mx, my, mz);
 
     vTaskDelayUntil( &xLastWakeTime, xFrequency );
   }
 }
+
+void sensorWorkerLsmPoller( void* z ) {
+  vTaskDelay( 2000 );
+  constexpr TickType_t xFrequency = 13;
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+
+  for ( ;; ) {
+    // where is the data stored
+    float mx,my,mz; //magnetic in uTesla
+    float gx,gy,gz; // gyros in uTesla
+    float ax,ay,az; // acceleration in g
+
+    // Get new data samples
+    if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
+      lsm9ds1.readMag();
+      lsm9ds1.readGyro();
+      lsm9ds1.readAccel();
+      xSemaphoreGive( i2cMutex );
+    }
+    mx = lsm9ds1.calcMag(lsm9ds1.mx);
+    my = lsm9ds1.calcMag(lsm9ds1.my);
+    mz = lsm9ds1.calcMag(lsm9ds1.mz);
+
+
+    gx = lsm9ds1.calcGyro(lsm9ds1.gx);
+    gy = lsm9ds1.calcGyro(lsm9ds1.gy);
+    gz = lsm9ds1.calcGyro(lsm9ds1.gz);
+
+    ax = lsm9ds1.calcAccel(lsm9ds1.ax);
+    ay = lsm9ds1.calcAccel(lsm9ds1.ay);
+    az = lsm9ds1.calcAccel(lsm9ds1.az);
+
+    updateImuData(gy, gy, gz, ax, ay, az, mx, my, mz);
+
+    vTaskDelayUntil( &xLastWakeTime, xFrequency );
+  }
+}
+
+void updateImuData(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz) {
+  // TODO: collection if calibration is enabled
+
+  // Apply mag compensation
+  mx = (mx - genericimucalibrationdata.mag_hardiron[0]) * genericimucalibrationdata.mag_softiron[0];
+  my = (my - genericimucalibrationdata.mag_hardiron[1]) * genericimucalibrationdata.mag_softiron[1];
+  mz = (mz - genericimucalibrationdata.mag_hardiron[2]) * genericimucalibrationdata.mag_softiron[2];
+
+  // Apply gyro zero-rate error compensation
+  gx += genericimucalibrationdata.gyro_zero_offsets[0];
+  gy += genericimucalibrationdata.gyro_zero_offsets[1];
+  gz += genericimucalibrationdata.gyro_zero_offsets[2];
+
+  // input into AHRS
+  ahrs.update(
+    gx,
+    gy,
+    gz,
+
+    ax,
+    ay,
+    az,
+
+    mx,
+    my,
+    mz
+  );
+
+  float w, x, y, z;
+  ahrs.getQuaternion( &w, &x, &y, &z );
+  imu::Quaternion orientation( w, x, y, z );
+
+  // rotate by the correction
+  {
+    imu::Quaternion correction;
+    correction.fromEuler( radians( steerConfig.mountCorrectionImuRoll ),
+                          radians( steerConfig.mountCorrectionImuPitch ),
+                          radians( steerConfig.mountCorrectionImuYaw ) );
+
+    orientation = orientation * correction;
+  }
+
+  // orientation has the corrected angles in it, extract them (and correct the refrence frame)
+  {
+    imu::Vector<3> euler;
+    euler = orientation.toEuler();
+    euler.toDegrees();
+    steerImuInclinometerData.roll = euler[2];
+    steerImuInclinometerData.pitch = -euler[1];
+
+    float heading = euler[0] + 180 + 90;
+
+    while ( heading > 360 ) {
+      heading -= 360;
+    }
+
+    steerImuInclinometerData.heading = heading;
+
+  }
+
+  {
+    static uint8_t loopCounter = 0;
+
+    if ( loopCounter++ > 99 ) {
+      loopCounter = 0;
+      {
+        Control* handle = ESPUI.getControl( labelOrientation );
+        handle->value = "Roll: ";
+        handle->value += ( float )steerImuInclinometerData.roll;
+        handle->value += "°, Pitch: ";
+        handle->value += ( float )steerImuInclinometerData.pitch;
+        handle->value += "°, Heading: ";
+        handle->value += ( float )steerImuInclinometerData.heading;
+
+        ESPUI.updateControl( handle );
+      }
+    }
+  }
+}
+
 
 void sensorWorkerSteeringPoller( void* z ) {
   vTaskDelay( 2000 );
@@ -377,7 +419,6 @@ void sensorWorkerSteeringPoller( void* z ) {
   }
 }
 
-
 void sensorWorker10HzPoller( void* z ) {
   constexpr TickType_t xFrequency = 100;
   TickType_t xLastWakeTime = xTaskGetTickCount();
@@ -454,11 +495,10 @@ void initSensors() {
     ESPUI.updateControl( handle );
   }
 
+  // Fxos8700Fxas21002
   if ( steerConfig.inclinoType == SteerConfig::InclinoType::Fxos8700Fxas21002 ||
        steerConfig.imuType == SteerConfig::ImuType::Fxos8700Fxas21002 ) {
-
     if ( fxas2100.begin() && fxos8700.begin( ACCEL_RANGE_2G ) ) {
-
       if ( steerConfig.imuType == SteerConfig::ImuType::Fxos8700Fxas21002 ) {
         initialisation.imuType = steerConfig.imuType;
 
@@ -467,7 +507,6 @@ void initSensors() {
         handle->color = ControlColor::Emerald;
         ESPUI.updateControl( handle );
       }
-
       if ( steerConfig.inclinoType == SteerConfig::InclinoType::Fxos8700Fxas21002 ) {
         initialisation.inclinoType = steerConfig.inclinoType;
 
@@ -476,11 +515,8 @@ void initSensors() {
         handle->color = ControlColor::Emerald;
         ESPUI.updateControl( handle );
       }
-
       ahrs.begin( 100 );
     } else {
-
-
       if ( steerConfig.imuType == SteerConfig::ImuType::Fxos8700Fxas21002 ) {
         initialisation.imuType = SteerConfig::ImuType::None;
 
@@ -489,7 +525,6 @@ void initSensors() {
         handle->color = ControlColor::Alizarin;
         ESPUI.updateControl( handle );
       }
-
       if ( steerConfig.inclinoType == SteerConfig::InclinoType::Fxos8700Fxas21002 ) {
         initialisation.inclinoType = SteerConfig::InclinoType::None;
 
@@ -499,7 +534,124 @@ void initSensors() {
         ESPUI.updateControl( handle );
       }
     }
+  }
 
+  // LSM9DS1
+  if ( steerConfig.inclinoType == SteerConfig::InclinoType::LSM9DS1 ||
+       steerConfig.imuType == SteerConfig::ImuType::LSM9DS1 ) {
+    // configuration
+    // Use either IMU_MODE_I2C or IMU_MODE_SPI
+    lsm9ds1.settings.device.commInterface = IMU_MODE_I2C;
+    // [mAddress] sets the I2C address of the LSM9DS1's magnetometer.
+    lsm9ds1.settings.device.mAddress = 0x1C;
+    // [agAddress] sets the I2C address of the LSM9DS1's accelerometer/gyroscope.
+    lsm9ds1.settings.device.agAddress = 0x6A;
+    // [enabled] turns the gyro on or off.
+    lsm9ds1.settings.gyro.enabled = true;  // Enable the gyro
+    // [scale] sets the full-scale range of the gyroscope.
+    // scale can be set to either 245, 500, or 2000
+    lsm9ds1.settings.gyro.scale = 245; // Set scale to +/-245dps
+    // [sampleRate] sets the output data rate (ODR) of the gyro
+    // sampleRate can be set between 1-6
+    // 1 = 14.9    4 = 238
+    // 2 = 59.5    5 = 476
+    // 3 = 119     6 = 952
+    lsm9ds1.settings.gyro.sampleRate = 3;
+    // [bandwidth] can set the cutoff frequency of the gyro.
+    // Allowed values: 0-3. Actual value of cutoff frequency
+    // depends on the sample rate. (Datasheet section 7.12)
+    lsm9ds1.settings.gyro.bandwidth = 0;
+    // [lowPowerEnable] turns low-power mode on or off.
+    lsm9ds1.settings.gyro.lowPowerEnable = false; // LP mode off
+    // [enabled] turns the acclerometer on or off.
+    lsm9ds1.settings.accel.enabled = true; // Enable accelerometer
+    // [enableX], [enableY], and [enableZ] can turn on or off
+    // select axes of the acclerometer.
+    lsm9ds1.settings.accel.enableX = true; // Enable X
+    lsm9ds1.settings.accel.enableY = true; // Enable Y
+    lsm9ds1.settings.accel.enableZ = true; // Enable Z
+    // [scale] sets the full-scale range of the accelerometer.
+    // accel scale can be 2, 4, 8, or 16
+    lsm9ds1.settings.accel.scale = 2;
+    // [sampleRate] sets the output data rate (ODR) of the
+    // accelerometer. ONLY APPLICABLE WHEN THE GYROSCOPE IS
+    // DISABLED! Otherwise accel sample rate = gyro sample rate.
+    // accel sample rate can be 1-6
+    // 1 = 10 Hz    4 = 238 Hz
+    // 2 = 50 Hz    5 = 476 Hz
+    // 3 = 119 Hz   6 = 952 Hz
+    lsm9ds1.settings.accel.sampleRate = 3;
+    // [enabled] turns the magnetometer on or off.
+    lsm9ds1.settings.mag.enabled = true; // Enable magnetometer
+    // [scale] sets the full-scale range of the magnetometer
+    // mag scale can be 4, 8, 12, or 16
+    lsm9ds1.settings.mag.scale = 4;
+    // [sampleRate] sets the output data rate (ODR) of the
+    // magnetometer.
+    // mag data rate can be 0-7:
+    // 0 = 0.625 Hz  4 = 10 Hz
+    // 1 = 1.25 Hz   5 = 20 Hz
+    // 2 = 2.5 Hz    6 = 40 Hz
+    // 3 = 5 Hz      7 = 80 Hz
+    lsm9ds1.settings.mag.sampleRate = 7;
+    // [enabled] turns the temperature sensor on or off.
+    lsm9ds1.settings.temp.enabled = true;
+    // [tempCompensationEnable] enables or disables
+    // temperature compensation of the magnetometer.
+    lsm9ds1.settings.mag.tempCompensationEnable = true;
+    // [XYPerformance] sets the x and y-axis performance of the
+    // magnetometer to either:
+    // 0 = Low power mode      2 = high performance
+    // 1 = medium performance  3 = ultra-high performance
+    lsm9ds1.settings.mag.XYPerformance = 3; // Ultra-high perform.
+    // [ZPerformance] does the same thing, but only for the z
+    lsm9ds1.settings.mag.ZPerformance = 3; // Ultra-high perform.
+    // [lowPowerEnable] enables or disables low power mode in
+    // the magnetometer.
+    lsm9ds1.settings.mag.lowPowerEnable = false;
+    // [operatingMode] sets the operating mode of the
+    // magnetometer. operatingMode can be 0-2:
+    // 0 = continuous conversion
+    // 1 = single-conversion
+    // 2 = power down
+    lsm9ds1.settings.mag.operatingMode = 0;
+
+    if ( lsm9ds1.begin() ) {
+      if ( steerConfig.imuType == SteerConfig::ImuType::LSM9DS1 ) {
+        initialisation.imuType = steerConfig.imuType;
+
+        Control* handle = ESPUI.getControl( labelStatusImu );
+        handle->value = "LSM9DS1 found & initialized";
+        handle->color = ControlColor::Emerald;
+        ESPUI.updateControl( handle );
+      }
+      if ( steerConfig.inclinoType == SteerConfig::InclinoType::LSM9DS1 ) {
+        initialisation.inclinoType = steerConfig.inclinoType;
+
+        Control* handle = ESPUI.getControl( labelStatusInclino );
+        handle->value = "LSM9DS1 found & initialized";
+        handle->color = ControlColor::Emerald;
+        ESPUI.updateControl( handle );
+      }
+      ahrs.begin( 76 ); // tradeoff, magnetometer only reports 80 times/second
+    } else {
+      if ( steerConfig.imuType == SteerConfig::ImuType::LSM9DS1 ) {
+        initialisation.imuType = SteerConfig::ImuType::None;
+
+        Control* handle = ESPUI.getControl( labelStatusImu );
+        handle->value = "LSM9DS1 not found";
+        handle->color = ControlColor::Alizarin;
+        ESPUI.updateControl( handle );
+      }
+      if ( steerConfig.inclinoType == SteerConfig::InclinoType::Fxos8700Fxas21002 ) {
+        initialisation.inclinoType = SteerConfig::InclinoType::None;
+
+        Control* handle = ESPUI.getControl( labelStatusInclino );
+        handle->value = "LSM9DS1 not found";
+        handle->color = ControlColor::Alizarin;
+        ESPUI.updateControl( handle );
+      }
+    }
   }
 
   // initialise ads1115 everytime, even if not avaible (no answer in the init -> just sending)
@@ -524,9 +676,13 @@ void initSensors() {
   if ( steerConfig.inclinoType == SteerConfig::InclinoType::MMA8451 ) {
     xTaskCreate( sensorWorker10HzPoller, "sensorWorker10HzPoller", 4096, NULL, 5, NULL );
   }
-  if ( steerConfig.imuType == SteerConfig::ImuType::Fxos8700Fxas21002 ||  steerConfig.imuType == SteerConfig::ImuType::LSM9DS1) {
-    xTaskCreate( sensorWorkerImuPoller, "sensorWorkerImuPoller", 8192, NULL, 5, NULL );
+  if ( steerConfig.imuType == SteerConfig::ImuType::Fxos8700Fxas21002 ) {
+    xTaskCreate( sensorWorkerFxPoller, "sensorWorkerFxPoller", 8192, NULL, 5, NULL );
   }
+  if ( steerConfig.imuType == SteerConfig::ImuType::LSM9DS1) {
+    xTaskCreate( sensorWorkerLsmPoller, "sensorWorkerLsmPoller", 8192, NULL, 5, NULL );
+  }
+
 
   xTaskCreate( sensorWorkerSteeringPoller, "sensorWorkerSteeringPoller", 8192 * 2, NULL, 6, NULL );
 }

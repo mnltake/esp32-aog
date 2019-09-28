@@ -429,5 +429,5 @@ extern void FXL6408_setDigitalOutput(uint8_t port, bool state);
 extern uint8_t FXL6408_getByteI2C(int i2cregister);
 extern uint8_t FXL6408_setByteI2C(int i2cregister, byte value) ;
 extern uint8_t FXL6408_setBit(uint8_t byte, uint8_t position, bool value) ;
-
+extern void updateImuData(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz);
 #endif
