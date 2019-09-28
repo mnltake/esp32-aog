@@ -136,7 +136,10 @@ void sensorWorkerImuPoller( void* z ) {
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
   for ( ;; ) {
-
+    // where is the data stored
+    float mx,my,mz; //magnetic in uTesla
+    float gx,gy,gz; // gyros in uTesla
+    float ax,ay,az; // acceleration in g
 
     if ( initialisation.inclinoType == SteerConfig::InclinoType::Fxos8700Fxas21002 ||
          initialisation.imuType == SteerConfig::ImuType::Fxos8700Fxas21002 ) {
@@ -149,68 +152,76 @@ void sensorWorkerImuPoller( void* z ) {
         fxos8700.getEvent( &accel_event, &mag_event );
         xSemaphoreGive( i2cMutex );
       }
+      mx = mag_event.magnetic.x;
+      my = mag_event.magnetic.y;
+      mz = mag_event.magnetic.z;
 
-      // Apply mag offset compensation (base values in uTesla)
-      float mx = mag_event.magnetic.x - genericimucalibrationdata.mag_hardiron[0];
-      float my = mag_event.magnetic.y - genericimucalibrationdata.mag_hardiron[1];
-      float mz = mag_event.magnetic.z - genericimucalibrationdata.mag_hardiron[2];
+      gx = degrees(gyro_event.gyro.x);
+      gy = degrees(gyro_event.gyro.y);
+      gz = degrees(gyro_event.gyro.z);
 
-      // Apply mag soft iron error compensation
-      float mmx = mx * genericimucalibrationdata.mag_softiron[0];
-      float mmy = mx * genericimucalibrationdata.mag_softiron[1];
-      float mmz = mx * genericimucalibrationdata.mag_softiron[2];
+      ax = accel_event.acceleration.x;
+      ay = accel_event.acceleration.y;
+      az = accel_event.acceleration.z;
+    }
 
-      // Apply gyro zero-rate error compensation
-      float gx = degrees( gyro_event.gyro.x + genericimucalibrationdata.gyro_zero_offsets[0] );
-      float gy = degrees( gyro_event.gyro.y + genericimucalibrationdata.gyro_zero_offsets[1] );
-      float gz = degrees( gyro_event.gyro.z + genericimucalibrationdata.gyro_zero_offsets[2] );
+    // TODO: collection if calibration is enabled
 
-      // input into AHRS
-      ahrs.update(
-        gx,
-        gy,
-        gz,
+    // Apply mag compensation
+    mx = (mx - genericimucalibrationdata.mag_hardiron[0]) * genericimucalibrationdata.mag_softiron[0];
+    my = (my - genericimucalibrationdata.mag_hardiron[1]) * genericimucalibrationdata.mag_softiron[1];
+    mz = (mz - genericimucalibrationdata.mag_hardiron[2]) * genericimucalibrationdata.mag_softiron[2];
 
-        accel_event.acceleration.x,
-        accel_event.acceleration.y,
-        accel_event.acceleration.z,
+    // Apply gyro zero-rate error compensation
+    gx += genericimucalibrationdata.gyro_zero_offsets[0];
+    gy += genericimucalibrationdata.gyro_zero_offsets[1];
+    gz += genericimucalibrationdata.gyro_zero_offsets[2];
 
-        mmx,
-        mmy,
-        mmz
-      );
+    // input into AHRS
+    ahrs.update(
+      gx,
+      gy,
+      gz,
 
-      float w, x, y, z;
-      ahrs.getQuaternion( &w, &x, &y, &z );
-      imu::Quaternion orientation( w, x, y, z );
+      ax,
+      ay,
+      az,
 
-      // rotate by the correction
-      {
-        imu::Quaternion correction;
-        correction.fromEuler( radians( steerConfig.mountCorrectionImuRoll ),
-                              radians( steerConfig.mountCorrectionImuPitch ),
-                              radians( steerConfig.mountCorrectionImuYaw ) );
+      mx,
+      my,
+      mz
+    );
 
-        orientation = orientation * correction;
+    float w, x, y, z;
+    ahrs.getQuaternion( &w, &x, &y, &z );
+    imu::Quaternion orientation( w, x, y, z );
+
+    // rotate by the correction
+    {
+      imu::Quaternion correction;
+      correction.fromEuler( radians( steerConfig.mountCorrectionImuRoll ),
+                            radians( steerConfig.mountCorrectionImuPitch ),
+                            radians( steerConfig.mountCorrectionImuYaw ) );
+
+      orientation = orientation * correction;
+    }
+
+    // orientation has the corrected angles in it, extract them (and correct the refrence frame)
+    {
+      imu::Vector<3> euler;
+      euler = orientation.toEuler();
+      euler.toDegrees();
+      steerImuInclinometerData.roll = euler[2];
+      steerImuInclinometerData.pitch = -euler[1];
+
+      float heading = euler[0] + 180 + 90;
+
+      while ( heading > 360 ) {
+        heading -= 360;
       }
 
-      // orientation has the corrected angles in it, extract them (and correct the refrence frame)
-      {
-        imu::Vector<3> euler;
-        euler = orientation.toEuler();
-        euler.toDegrees();
-        steerImuInclinometerData.roll = euler[2];
-        steerImuInclinometerData.pitch = -euler[1];
+      steerImuInclinometerData.heading = heading;
 
-        float heading = euler[0] + 180 + 90;
-
-        while ( heading > 360 ) {
-          heading -= 360;
-        }
-
-        steerImuInclinometerData.heading = heading;
-
-      }
     }
 
     {
