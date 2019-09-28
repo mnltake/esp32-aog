@@ -159,7 +159,9 @@ struct SteerConfig {
 
   enum class WheelAngleSensorType : uint8_t {
     WheelAngle = 0,
-    TieRodDisplacement
+    TieRodDisplacement,
+    AckermannLeft,
+    AckermannRight
   } wheelAngleSensorType = WheelAngleSensorType::WheelAngle;
 
   SteerConfig::AnalogIn wheelAngleInput = SteerConfig::AnalogIn::ADS1115A2Single;
@@ -188,7 +190,6 @@ struct SteerConfig {
   uint32_t i2cBusSpeed = 400000;
   enum class ImuType : uint8_t {
     None = 0,
-    BNO055 = 1,
     Fxos8700Fxas21002,
     LSM9DS1
   } imuType = ImuType::LSM9DS1;
@@ -196,7 +197,6 @@ struct SteerConfig {
   enum class InclinoType : uint8_t {
     None = 0,
     MMA8451 = 1,
-    DOGS2,
     Fxos8700Fxas21002,
     LSM9DS1
   } inclinoType = InclinoType::LSM9DS1;
@@ -246,9 +246,6 @@ struct SteerConfig {
     USB = 2,
     RS232 = 4,
     UDPRS232 = 5,
-    Serial1,
-    Serial2,
-    Bluetooth
   } sendNmeaDataTo = SendNmeaDataTo::UDPRS232;
 
   uint16_t sendNmeaDataTcpPort = 0;
@@ -264,44 +261,33 @@ struct SteerConfig {
 };
 extern SteerConfig steerConfig, steerConfigDefaults;
 
-extern adafruit_bno055_offsets_t bno055CalibrationData;
 
-struct Fxos8700Fxas21002CalibrationData {
+struct GenericImuCalibrationData {
 
-  Fxos8700Fxas21002CalibrationData() {
-    mag_offsets[0] = -13.56F;
-    mag_offsets[1] = -11.98F;
-    mag_offsets[2] = -85.02F;
-
-    mag_softiron_matrix[0][0] =  0.998;
-    mag_softiron_matrix[0][1] = -0.048;
-    mag_softiron_matrix[0][2] = -0.009;
-    mag_softiron_matrix[1][0] = -0.048;
-    mag_softiron_matrix[1][1] =  1.022;
-    mag_softiron_matrix[1][2] =  0.016;
-    mag_softiron_matrix[2][0] = -0.009;
-    mag_softiron_matrix[2][1] =  0.016;
-    mag_softiron_matrix[2][2] =  0.983;
-
-    mag_field_strength = 53.21F;
+  GenericImuCalibrationData() {
+    // init with neutral element
+    mag_hardiron[0] = 0.0;
+    mag_hardiron[1] = 0.0;
+    mag_hardiron[2] = 0.0;
+    mag_softiron[0] = 1.0;
+    mag_softiron[1] = 1.0;
+    mag_softiron[2] = 1.0;
 
     gyro_zero_offsets[0] = 0;
     gyro_zero_offsets[1] = 0;
     gyro_zero_offsets[2] = 0;
   };
 
-  // Offsets applied to raw x/y/z mag values
-  float mag_offsets[3];
+  // hard iron compensation
+  float mag_hardiron[3];
 
   // Soft iron error compensation matrix
-  float mag_softiron_matrix[3][3];
-
-  float mag_field_strength;
+  float mag_softiron[3];
 
   // Offsets applied to compensate for gyro zero-drift error for x/y/z
   float gyro_zero_offsets[3];
 };
-extern Fxos8700Fxas21002CalibrationData fxos8700Fxas21002CalibrationData;
+extern GenericImuCalibrationData genericimucalibrationdata;
 
 struct Initialisation {
   SteerConfig::OutputType outputType = SteerConfig::OutputType::None;
@@ -326,9 +312,8 @@ enum class EepromAddresses : uint16_t {
   CRC = 0,
   Validator = 5,
   SizeOfConfig = 7,
-  Bno055CalibrationData = 9,
-  Fxos8700Fxas21002CalibrationData = Bno055CalibrationData + sizeof( bno055CalibrationData ),
-  SteerConfig = Fxos8700Fxas21002CalibrationData + sizeof( fxos8700Fxas21002CalibrationData )
+  GenericImuCalibrationData = 9,
+  SteerConfig = GenericImuCalibrationData + sizeof( GenericImuCalibrationData )
 };
 
 struct SteerSettings {

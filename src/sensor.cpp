@@ -50,7 +50,6 @@
 #include "ringbuffer.hpp"
 
 Adafruit_MMA8451 mma = Adafruit_MMA8451();
-Adafruit_BNO055 bno = Adafruit_BNO055( 55 );
 Adafruit_FXAS21002C fxas2100 = Adafruit_FXAS21002C( 0x0021002C );
 Adafruit_FXOS8700 fxos8700 = Adafruit_FXOS8700( 0x8700A, 0x8700B );
 Adafruit_ADS1115 ads = Adafruit_ADS1115( 0x48 );
@@ -58,87 +57,15 @@ Adafruit_ADS1115 ads = Adafruit_ADS1115( 0x48 );
 Madgwick ahrs;
 // Mahony filter;
 
-adafruit_bno055_offsets_t bno055CalibrationData;
-Fxos8700Fxas21002CalibrationData fxos8700Fxas21002CalibrationData;
+GenericImuCalibrationData genericimucalibrationdata;
 
 SteerImuInclinometerData steerImuInclinometerData;
-
-Average<float, float, 20> accXaverage, accYaverage, accZaverage;
-float accX, accY, accZ;
 
 volatile uint16_t samplesPerSecond;
 
 Average<float, float, 10> wasAverage;
 
 imu::Quaternion mountingCorrection;
-
-// FXOS8700/FXAS2100
-
-// http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=bu&passmode=lp&order=2&usesr=usesr&sr=100&frequencyLow=10&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
-//Low pass butterworth filter order=2 alpha1=0.1
-class  FilterBuLp2_fxos8700Acc {
-  public:
-    FilterBuLp2_fxos8700Acc() {
-      v[0] = 0.0;
-      v[1] = 0.0;
-    }
-  private:
-    float v[3];
-  public:
-    float step( float x ) { //class II
-      v[0] = v[1];
-      v[1] = v[2];
-      v[2] = ( 6.745527388907189559e-2 * x )
-             + ( -0.41280159809618854894 * v[0] )
-             + ( 1.14298050253990091107 * v[1] );
-      return
-        ( v[0] + v[2] )
-        + 2 * v[1];
-    }
-} fxos8700accFilterX, fxos8700accFilterY, fxos8700accFilterZ;
-
-// http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=bu&passmode=lp&order=2&usesr=usesr&sr=100&frequencyLow=10&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
-//Low pass butterworth filter order=2 alpha1=0.1
-class  FilterBuLp2_fxos8700Mag {
-  public:
-    FilterBuLp2_fxos8700Mag() {
-      v[0] = 0.0;
-      v[1] = 0.0;
-    }
-  private:
-    float v[3];
-  public:
-    float step( float x ) { //class II
-      v[0] = v[1];
-      v[1] = v[2];
-      v[2] = ( 6.745527388907189559e-2 * x )
-             + ( -0.41280159809618854894 * v[0] )
-             + ( 1.14298050253990091107 * v[1] );
-      return
-        ( v[0] + v[2] )
-        + 2 * v[1];
-    }
-} fxos8700magFilterX, fxos8700magFilterY, fxos8700magFilterZ;
-
-// http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=bu&passmode=hp&order=1&usesr=usesr&sr=100&frequencyLow=1&noteLow=&noteHigh=&calctype=float&run=Send
-// High pass butterworth filter order=1 alpha1=0.01
-class  FilterBuHp2_fxas2100Gyr {
-  public:
-    FilterBuHp2_fxas2100Gyr() {
-      v[0] = 0.0;
-    }
-  private:
-    float v[2];
-  public:
-    float step( float x ) { //class II
-      v[0] = v[1];
-      v[1] = ( 9.695312529087461995e-1 * x )
-             + ( 0.93906250581749239892 * v[0] );
-      return
-        ( v[1] - v[0] );
-    }
-} fxas2100gyrFilterX, fxas2100gyrFilterY, fxas2100gyrFilterZ;
-
 
 //Low pass butterworth filter order=2 alpha1=0.05
 class  FilterBuLp2_mma8481acc {
@@ -161,29 +88,6 @@ class  FilterBuLp2_mma8481acc {
         + 2 * v[1];
     }
 } mma8481accFilterX, mma8481accFilterY, mma8481accFilterZ;
-
-// http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=bu&passmode=lp&order=2&usesr=usesr&sr=1000&frequencyLow=5&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
-//Low pass butterworth filter order=2 alpha1=0.005
-class  FilterBuLp2_2 {
-  public:
-    FilterBuLp2_2() {
-      v[0] = 0.0;
-      v[1] = 0.0;
-    }
-  private:
-    float v[3];
-  public:
-    float step( float x ) { //class II
-      v[0] = v[1];
-      v[1] = v[2];
-      v[2] = ( 2.413590490419614820e-4 * x )
-             + ( -0.95654367651120375537 * v[0] )
-             + ( 1.95557824031503590945 * v[1] );
-      return
-        ( v[0] + v[2] )
-        + 2 * v[1];
-    }
-} filterRoll, filterPitch, filterHeading;
 
 // http://www.schwietering.com/jayduino/filtuino/index.php?characteristic=bu&passmode=lp&order=2&usesr=usesr&sr=100&frequencyLow=5&noteLow=&noteHigh=&pw=pw&calctype=float&run=Send
 //Low pass butterworth filter order=2 alpha1=0.05
@@ -225,146 +129,14 @@ void calculateMountingCorrection() {
   }
 }
 
-/**************************************************************************/
-/*
-    Display the raw calibration offset and radius data
-    */
-/**************************************************************************/
-void displaySensorOffsets( const adafruit_bno055_offsets_t& calibData ) {
-  Serial.print( "Accelerometer: " );
-  Serial.print( calibData.accel_offset_x );
-  Serial.print( " " );
-  Serial.print( calibData.accel_offset_y );
-  Serial.print( " " );
-  Serial.println( calibData.accel_offset_z );
 
-  Serial.print( "Gyro: " );
-  Serial.print( calibData.gyro_offset_x );
-  Serial.print( " " );
-  Serial.print( calibData.gyro_offset_y );
-  Serial.print( " " );
-  Serial.println( calibData.gyro_offset_z );
-
-  Serial.print( "Mag: " );
-  Serial.print( calibData.mag_offset_x );
-  Serial.print( " " );
-  Serial.print( calibData.mag_offset_y );
-  Serial.print( " " );
-  Serial.println( calibData.mag_offset_z );
-
-  Serial.print( "Accel Radius: " );
-  Serial.println( calibData.accel_radius );
-
-  Serial.print( "Mag Radius: " );
-  Serial.println( calibData.mag_radius );
-}
-
-void sensorWorker1HzPoller( void* z ) {
-  vTaskDelay( 2000 );
-  uint8_t loopCounter = 0;
-
-  constexpr TickType_t xFrequency = 1000;
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-
-  for ( ;; ) {
-    if ( initialisation.imuType == SteerConfig::ImuType::BNO055 ) {
-
-      // Display calibration status for each sensor.
-      uint8_t system, gyro, accel, mag = 0;
-
-      if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
-        bno.getCalibration( &system, &gyro, &accel, &mag );
-        xSemaphoreGive( i2cMutex );
-      }
-
-//       Serial.print( "CALIBRATION: Sys=" );
-//       Serial.print( system, DEC );
-//       Serial.print( " Gyro=" );
-//       Serial.print( gyro, DEC );
-//       Serial.print( " Accel=" );
-//       Serial.print( accel, DEC );
-//       Serial.print( " Mag=" );
-//       Serial.println( mag, DEC );
-
-      {
-        Control* handle = ESPUI.getControl( labelStatusImu );
-
-        if ( system == 3 && gyro == 3 && accel == 3 && mag == 3 ) {
-          handle->value = "BNO055 found & calibrated";
-          handle->color = ControlColor::Emerald;
-
-          // save to eeprom every 250s
-          if ( loopCounter++ > 250 ) {
-            loopCounter = 0;
-
-            if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
-              bno.getSensorOffsets( bno055CalibrationData );
-              xSemaphoreGive( i2cMutex );
-            }
-
-            displaySensorOffsets( bno055CalibrationData );
-
-            Serial.println( "Calibration saved to EEPROM" );
-
-            writeEeprom();
-          }
-        } else {
-          String str;
-          str.reserve( 40 );
-          str += "BNO055 found but not calibrated: S:G:A:M=";
-          str += system;
-          str += ":";
-          str += gyro;
-          str += ":";
-          str += accel;
-          str += ":";
-          str += mag;
-          handle->value = str;
-          handle->color = ControlColor::Carrot;
-        }
-
-        ESPUI.updateControl( handle );
-      }
-
-//       Serial.print( "Bno calibration Millis: " );
-//       Serial.print( millis() );
-//       Serial.print( " duration: " );
-//       Serial.println( millis() - start );
-    }
-
-    vTaskDelayUntil( &xLastWakeTime, xFrequency );
-  }
-}
-
-void sensorWorker100HzPoller( void* z ) {
+void sensorWorkerImuPoller( void* z ) {
   vTaskDelay( 2000 );
   constexpr TickType_t xFrequency = 10;
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
   for ( ;; ) {
-    if ( initialisation.imuType == SteerConfig::ImuType::BNO055 ) {
-      imu::Quaternion orientation;
-      imu::Vector<3> euler;
 
-      if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
-        orientation = bno.getQuat();
-        xSemaphoreGive( i2cMutex );
-
-        // rotate by the correction
-        {
-          imu::Quaternion correction;
-          correction.fromEuler( radians( steerConfig.mountCorrectionImuRoll ),
-                                radians( steerConfig.mountCorrectionImuPitch ),
-                                radians( steerConfig.mountCorrectionImuYaw ) );
-
-          orientation = orientation * correction;
-        }
-
-        euler = orientation.toEuler();
-        euler.toDegrees();
-        steerImuInclinometerData.heading = filterHeading.step( euler[0] );;
-      }
-    }
 
     if ( initialisation.inclinoType == SteerConfig::InclinoType::Fxos8700Fxas21002 ||
          initialisation.imuType == SteerConfig::ImuType::Fxos8700Fxas21002 ) {
@@ -378,92 +150,20 @@ void sensorWorker100HzPoller( void* z ) {
         xSemaphoreGive( i2cMutex );
       }
 
-      if ( steerImuInclinometerData.sendCalibrationDataFromImu ) {
-        // Print the sensor data
-        Serial.print( "Raw:" );
-        Serial.print( fxos8700.accel_raw.x );
-        Serial.print( ',' );
-        Serial.print( fxos8700.accel_raw.y );
-        Serial.print( ',' );
-        Serial.print( fxos8700.accel_raw.z );
-        Serial.print( ',' );
-        Serial.print( fxas2100.raw.x );
-        Serial.print( ',' );
-        Serial.print( fxas2100.raw.y );
-        Serial.print( ',' );
-        Serial.print( fxas2100.raw.z );
-        Serial.print( ',' );
-        Serial.print( fxos8700.mag_raw.x );
-        Serial.print( ',' );
-        Serial.print( fxos8700.mag_raw.y );
-        Serial.print( ',' );
-        Serial.print( fxos8700.mag_raw.z );
-        Serial.println();
-
-        if ( Serial.available() >= 68 ) {
-          static uint8_t data[68];
-          Serial.readBytes( data, sizeof( data ) );
-          static float dataFloat[16];
-          memcpy( dataFloat, data + 2, 64 );
-
-          fxos8700Fxas21002CalibrationData.mag_offsets[0] = dataFloat[6];
-          fxos8700Fxas21002CalibrationData.mag_offsets[1] = dataFloat[7];
-          fxos8700Fxas21002CalibrationData.mag_offsets[2] = dataFloat[8];
-
-          fxos8700Fxas21002CalibrationData.mag_field_strength = dataFloat[9];
-
-          fxos8700Fxas21002CalibrationData.mag_softiron_matrix[0][0] = dataFloat[10];
-          fxos8700Fxas21002CalibrationData.mag_softiron_matrix[0][1] = dataFloat[13];
-          fxos8700Fxas21002CalibrationData.mag_softiron_matrix[0][2] = dataFloat[14];
-          fxos8700Fxas21002CalibrationData.mag_softiron_matrix[1][0] = dataFloat[13];
-          fxos8700Fxas21002CalibrationData.mag_softiron_matrix[1][1] = dataFloat[11];
-          fxos8700Fxas21002CalibrationData.mag_softiron_matrix[1][2] = dataFloat[15];
-          fxos8700Fxas21002CalibrationData.mag_softiron_matrix[2][0] = dataFloat[14];
-          fxos8700Fxas21002CalibrationData.mag_softiron_matrix[2][1] = dataFloat[15];
-          fxos8700Fxas21002CalibrationData.mag_softiron_matrix[2][2] = dataFloat[12];
-
-          fxos8700Fxas21002CalibrationData.gyro_zero_offsets[0] = dataFloat[0];
-          fxos8700Fxas21002CalibrationData.gyro_zero_offsets[1] = dataFloat[1];
-          fxos8700Fxas21002CalibrationData.gyro_zero_offsets[2] = dataFloat[2];
-        }
-      }
-
       // Apply mag offset compensation (base values in uTesla)
-      float mx = mag_event.magnetic.x - fxos8700Fxas21002CalibrationData.mag_offsets[0];
-      float my = mag_event.magnetic.y - fxos8700Fxas21002CalibrationData.mag_offsets[1];
-      float mz = mag_event.magnetic.z - fxos8700Fxas21002CalibrationData.mag_offsets[2];
+      float mx = mag_event.magnetic.x - genericimucalibrationdata.mag_hardiron[0];
+      float my = mag_event.magnetic.y - genericimucalibrationdata.mag_hardiron[1];
+      float mz = mag_event.magnetic.z - genericimucalibrationdata.mag_hardiron[2];
 
       // Apply mag soft iron error compensation
-      float mmx = mx * fxos8700Fxas21002CalibrationData.mag_softiron_matrix[0][0] +
-                  my * fxos8700Fxas21002CalibrationData.mag_softiron_matrix[0][1] +
-                  mz * fxos8700Fxas21002CalibrationData.mag_softiron_matrix[0][2];
-      float mmy = mx * fxos8700Fxas21002CalibrationData.mag_softiron_matrix[1][0] +
-                  my * fxos8700Fxas21002CalibrationData.mag_softiron_matrix[1][1] +
-                  mz * fxos8700Fxas21002CalibrationData.mag_softiron_matrix[1][2];
-      float mmz = mx * fxos8700Fxas21002CalibrationData.mag_softiron_matrix[2][0] +
-                  my * fxos8700Fxas21002CalibrationData.mag_softiron_matrix[2][1] +
-                  mz * fxos8700Fxas21002CalibrationData.mag_softiron_matrix[2][2];
+      float mmx = mx * genericimucalibrationdata.mag_softiron[0];
+      float mmy = mx * genericimucalibrationdata.mag_softiron[1];
+      float mmz = mx * genericimucalibrationdata.mag_softiron[2];
 
       // Apply gyro zero-rate error compensation
-      float gx = degrees( gyro_event.gyro.x + fxos8700Fxas21002CalibrationData.gyro_zero_offsets[0] );
-      float gy = degrees( gyro_event.gyro.y + fxos8700Fxas21002CalibrationData.gyro_zero_offsets[1] );
-      float gz = degrees( gyro_event.gyro.z + fxos8700Fxas21002CalibrationData.gyro_zero_offsets[2] );
-
-//       // filter everything: lpf acc + mag, hpf gyr
-//       // input into AHRS
-//       ahrs.update(
-//         fxas2100gyrFilterX.step( gx ),
-//         fxas2100gyrFilterY.step( gy ),
-//         fxas2100gyrFilterZ.step( gz ),
-//
-//         fxos8700accFilterX.step( accel_event.acceleration.x ),
-//         fxos8700accFilterY.step( accel_event.acceleration.y ),
-//         fxos8700accFilterZ.step( accel_event.acceleration.z ),
-//
-//         fxos8700magFilterX.step( mmx ),
-//         fxos8700magFilterY.step( mmy ),
-//         fxos8700magFilterZ.step( mmz )
-//       );
+      float gx = degrees( gyro_event.gyro.x + genericimucalibrationdata.gyro_zero_offsets[0] );
+      float gy = degrees( gyro_event.gyro.y + genericimucalibrationdata.gyro_zero_offsets[1] );
+      float gz = degrees( gyro_event.gyro.z + genericimucalibrationdata.gyro_zero_offsets[2] );
 
       // input into AHRS
       ahrs.update(
@@ -510,25 +210,38 @@ void sensorWorker100HzPoller( void* z ) {
 
         steerImuInclinometerData.heading = heading;
 
-//         if ( !steerConfig.sendCalibrationDataFromImu ) {
-//           static uint8_t loopCounter = 0;
-//
-//           if ( loopCounter++ > 9 ) {
-//             loopCounter = 0;
-//             {
-//               Serial.print( "roll, pitch, heading: " );
-//               Serial.print( steerImuInclinometerData.roll, 4 );
-//               Serial.print( ", " );
-//               Serial.print( steerImuInclinometerData.pitch, 4 );
-//               Serial.print( ", " );
-//               Serial.println( steerImuInclinometerData.heading, 4 );
-//             }
-//           }
-//         }
       }
     }
 
+    {
+      static uint8_t loopCounter = 0;
 
+      if ( loopCounter++ > 99 ) {
+        loopCounter = 0;
+        {
+          Control* handle = ESPUI.getControl( labelOrientation );
+          handle->value = "Roll: ";
+          handle->value += ( float )steerImuInclinometerData.roll;
+          handle->value += "°, Pitch: ";
+          handle->value += ( float )steerImuInclinometerData.pitch;
+          handle->value += "°, Heading: ";
+          handle->value += ( float )steerImuInclinometerData.heading;
+
+          ESPUI.updateControl( handle );
+        }
+      }
+    }
+
+    vTaskDelayUntil( &xLastWakeTime, xFrequency );
+  }
+}
+
+void sensorWorkerSteeringPoller( void* z ) {
+  vTaskDelay( 2000 );
+  constexpr TickType_t xFrequency = 10;
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+
+  for ( ;; ) {
     if ( steerConfig.wheelAngleInput != SteerConfig::AnalogIn::None ) {
       float wheelAngleTmp = 0;
 
@@ -620,21 +333,10 @@ void sensorWorker100HzPoller( void* z ) {
     }
 
     {
-      static uint8_t loopCounter = 0;
+      static uint8_t loopCounter = 45;
 
       if ( loopCounter++ > 99 ) {
         loopCounter = 0;
-        {
-          Control* handle = ESPUI.getControl( labelOrientation );
-          handle->value = "Roll: ";
-          handle->value += ( float )steerImuInclinometerData.roll;
-          handle->value += "°, Pitch: ";
-          handle->value += ( float )steerImuInclinometerData.pitch;
-          handle->value += "°, Heading: ";
-          handle->value += ( float )steerImuInclinometerData.heading;
-
-          ESPUI.updateControl( handle );
-        }
         {
           Control* handle = ESPUI.getControl( labelWheelAngle );
           String str;
@@ -680,23 +382,15 @@ void sensorWorker10HzPoller( void* z ) {
         xSemaphoreGive( i2cMutex );
       }
 
+      float fXg, fYg,fZg;
+
+
       for ( uint8_t i = 0; i < numSamples; i++ ) {
-        float x = mma8481accFilterX.step( events[i].acceleration.x );
-        float y = mma8481accFilterY.step( events[i].acceleration.y );
-        float z = mma8481accFilterZ.step( events[i].acceleration.z );
-
-//         accXaverage += x;
-//         accYaverage += y;
-//         accZaverage += z;
-
-        accX = x;
-        accY = y;
-        accZ = z;
+        fXg = mma8481accFilterX.step( events[i].acceleration.x );
+        fYg = mma8481accFilterY.step( events[i].acceleration.y );
+        fZg = mma8481accFilterZ.step( events[i].acceleration.z );
       }
 
-      float fXg = accX/*average*/;
-      float fYg = accY/*average*/;
-      float fZg = accZ/*average*/;
       float roll  = ( atan2( -fYg, fZg ) * 180.0 ) / M_PI;
       float pitch = ( atan2( fXg, sqrt( fYg * fYg + fZg * fZg ) ) * 180.0 ) / M_PI;
 
@@ -743,32 +437,6 @@ void initSensors() {
       initialisation.inclinoType = SteerConfig::InclinoType::None;
 
       handle->value = "MMA8451 not found";
-      handle->color = ControlColor::Alizarin;
-    }
-
-    ESPUI.updateControl( handle );
-  }
-
-  if ( steerConfig.imuType == SteerConfig::ImuType::BNO055 ) {
-    Control* handle = ESPUI.getControl( labelStatusImu );
-
-    if ( bno.begin() ) {
-      initialisation.imuType = SteerConfig::ImuType::BNO055;
-
-      handle->value = "BNO055 found & initialized";
-      handle->color = ControlColor::Emerald;
-
-      displaySensorOffsets( bno055CalibrationData );
-
-      if ( bno055CalibrationData.mag_radius != 0xffff ) {
-        bno.setSensorOffsets( bno055CalibrationData );
-      }
-
-      bno.setExtCrystalUse( true );
-    } else {
-      initialisation.imuType = SteerConfig::ImuType::None;
-
-      handle->value = "BNO055 not found";
       handle->color = ControlColor::Alizarin;
     }
 
@@ -842,15 +510,12 @@ void initSensors() {
     ESPUI.updateControl( handle );
   }
 
-  if ( steerConfig.imuType == SteerConfig::ImuType::BNO055 ) {
-    xTaskCreate( sensorWorker1HzPoller, "sensorWorker1HzPoller", 4096, NULL, 1, NULL );
-  }
-
   if ( steerConfig.inclinoType == SteerConfig::InclinoType::MMA8451 ) {
     xTaskCreate( sensorWorker10HzPoller, "sensorWorker10HzPoller", 4096, NULL, 5, NULL );
   }
+  if ( steerConfig.imuType == SteerConfig::ImuType::Fxos8700Fxas21002 ||  steerConfig.imuType == SteerConfig::ImuType::LSM9DS1) {
+    xTaskCreate( sensorWorkerImuPoller, "sensorWorkerImuPoller", 8192, NULL, 5, NULL );
+  }
 
-  xTaskCreate( sensorWorker100HzPoller, "sensorWorker100HzPoller", 8192 * 2, NULL, 6, NULL );
+  xTaskCreate( sensorWorkerSteeringPoller, "sensorWorkerSteeringPoller", 8192 * 2, NULL, 6, NULL );
 }
-
-

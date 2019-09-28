@@ -90,8 +90,7 @@ void setResetButtonToRed() {
 void writeEeprom() {
   EEPROM.writeUChar( ( uint16_t )EepromAddresses::Validator, 0 );
   EEPROM.writeUShort( ( uint16_t )EepromAddresses::SizeOfConfig, ( uint16_t )sizeof( SteerConfig ) );
-  EEPROM.put( ( uint16_t )EepromAddresses::Bno055CalibrationData, bno055CalibrationData );
-  EEPROM.put( ( uint16_t )EepromAddresses::Fxos8700Fxas21002CalibrationData, fxos8700Fxas21002CalibrationData );
+  EEPROM.put( ( uint16_t )EepromAddresses::GenericImuCalibrationData, genericimucalibrationdata );
   EEPROM.put( ( uint16_t )EepromAddresses::SteerConfig, steerConfig );
   EEPROM.commit();
 }
@@ -221,8 +220,7 @@ void setup( void ) {
   if ( ( EEPROM.readUChar( ( uint16_t )EepromAddresses::Validator ) != 0xff ) &&
        ( EEPROM.readUShort( ( uint16_t )EepromAddresses::SizeOfConfig ) == sizeof( SteerConfig ) ) ) {
     Serial.println( "Read from EEPROM" );
-    EEPROM.get( ( uint16_t )EepromAddresses::Bno055CalibrationData, bno055CalibrationData );
-    EEPROM.get( ( uint16_t )EepromAddresses::Fxos8700Fxas21002CalibrationData, fxos8700Fxas21002CalibrationData );
+    EEPROM.get( ( uint16_t )EepromAddresses::GenericImuCalibrationData, genericimucalibrationdata );
     EEPROM.get( ( uint16_t )EepromAddresses::SteerConfig, steerConfig );
   } else {
     Serial.println( "Not read from EEPROM" );
@@ -311,7 +309,7 @@ gpio_set_pull_mode(GPIO_NUM_13, GPIO_FLOATING);
       }
       statusLedPattern = 0b00000000111111110000000011111111;
     } else {
-      statusLedPattern = 0b11111111111111000011111111111111;
+      statusLedPattern = 0b11111111111111100111111111111111;
     }
   }
 
