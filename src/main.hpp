@@ -313,7 +313,7 @@ enum class EepromAddresses : uint16_t {
   Validator = 5,
   SizeOfConfig = 7,
   GenericImuCalibrationData = 9,
-  SteerConfig = GenericImuCalibrationData + sizeof( GenericImuCalibrationData )
+  SteerConfig = GenericImuCalibrationData + sizeof( genericimucalibrationdata )
 };
 
 struct SteerSettings {

@@ -566,14 +566,14 @@ gpio_set_pull_mode(GPIO_NUM_13, GPIO_FLOATING);
         steerConfig.wheelAngleInput = ( SteerConfig::AnalogIn )control->value.toInt();
         setResetButtonToRed();
       } );
-      ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
       ESPUI.addControl( ControlType::Option, "ESP32 I1", String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio36 ), ControlColor::Alizarin, sel );
       ESPUI.addControl( ControlType::Option, "ESP32 I2", String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio39 ), ControlColor::Alizarin, sel );
       ESPUI.addControl( ControlType::Option, "ESP32 I3", String( ( uint8_t )SteerConfig::Gpio::Esp32Gpio34 ), ControlColor::Alizarin, sel );
       ESPUI.addControl( ControlType::Option, "ADS1115 A0", String( ( uint8_t )SteerConfig::AnalogIn::ADS1115A0Single ), ControlColor::Alizarin, sel );
       ESPUI.addControl( ControlType::Option, "ADS1115 A1", String( ( uint8_t )SteerConfig::AnalogIn::ADS1115A1Single ), ControlColor::Alizarin, sel );
       ESPUI.addControl( ControlType::Option, "ADS1115 A2", String( ( uint8_t )SteerConfig::AnalogIn::ADS1115A2Single ), ControlColor::Alizarin, sel );
-      ESPUI.addControl( ControlType::Option, "ADS1115 A0/A1 differential", String( ( uint8_t )SteerConfig::AnalogIn::ADS1115A2Single ), ControlColor::Alizarin, sel );
+      ESPUI.addControl( ControlType::Option, "ADS1115 A0/A1 differential", String( ( uint8_t )SteerConfig::AnalogIn::ADS1115A0A1Differential ), ControlColor::Alizarin, sel );
+      ESPUI.addControl( ControlType::Option, "None", "0", ControlColor::Alizarin, sel );
     }
 
     {
@@ -583,6 +583,8 @@ gpio_set_pull_mode(GPIO_NUM_13, GPIO_FLOATING);
       } );
       ESPUI.addControl( ControlType::Option, "Direct Wheel Angle", "0", ControlColor::Alizarin, sel );
       ESPUI.addControl( ControlType::Option, "Two Arms connected to tie rod", "1", ControlColor::Alizarin, sel );
+      ESPUI.addControl( ControlType::Option, "Ackermann (sensor left)", "2", ControlColor::Alizarin, sel );
+      ESPUI.addControl( ControlType::Option, "Ackermann (sensor right)", "3", ControlColor::Alizarin, sel );
     }
 
     ESPUI.addControl( ControlType::Switcher, "Allow AgOpenGPS to overwrite Counts per Degree and Steer Angle Center (not recomned)", steerConfig.allowWheelAngleCenterAndCountsOverwrite ? "1" : "0", ControlColor::Peterriver, tab,
@@ -626,21 +628,21 @@ gpio_set_pull_mode(GPIO_NUM_13, GPIO_FLOATING);
     }
 
     {
-      uint16_t num = ESPUI.addControl( ControlType::Number, "1. Arm connect to sensor (mm)", String( steerConfig.wheelAngleFirstArmLenght ), ControlColor::Peterriver, tab,
+      uint16_t num = ESPUI.addControl( ControlType::Number, "1. Arm connect to sensor (mm) / Wheelbase (cm)", String( steerConfig.wheelAngleFirstArmLenght ), ControlColor::Peterriver, tab,
       []( Control * control, int id ) {
         steerConfig.wheelAngleFirstArmLenght = control->value.toFloat();
       } );
       ESPUI.addControl( ControlType::Min, "Min", "0", ControlColor::Peterriver, num );
-      ESPUI.addControl( ControlType::Max, "Max", "500", ControlColor::Peterriver, num );
+      ESPUI.addControl( ControlType::Max, "Max", "1000", ControlColor::Peterriver, num );
       ESPUI.addControl( ControlType::Step, "Step", "1", ControlColor::Peterriver, num );
     }
     {
-      uint16_t num = ESPUI.addControl( ControlType::Number, "2. Arm connect to tie rod (mm)", String( steerConfig.wheelAngleSecondArmLenght ), ControlColor::Peterriver, tab,
+      uint16_t num = ESPUI.addControl( ControlType::Number, "2. Arm connect to tie rod (mm) / Track width (cm)", String( steerConfig.wheelAngleSecondArmLenght ), ControlColor::Peterriver, tab,
       []( Control * control, int id ) {
         steerConfig.wheelAngleSecondArmLenght = control->value.toFloat();
       } );
       ESPUI.addControl( ControlType::Min, "Min", "0", ControlColor::Peterriver, num );
-      ESPUI.addControl( ControlType::Max, "Max", "500", ControlColor::Peterriver, num );
+      ESPUI.addControl( ControlType::Max, "Max", "1000", ControlColor::Peterriver, num );
       ESPUI.addControl( ControlType::Step, "Step", "1", ControlColor::Peterriver, num );
     }
     {
@@ -807,6 +809,7 @@ gpio_set_pull_mode(GPIO_NUM_13, GPIO_FLOATING);
       ESPUI.addControl( ControlType::Button, "Gyro calibration (30s)", "Start", ControlColor::Peterriver, tab,
       []( Control * control, int id ) {
         if ( id == B_UP ) {
+          statusLedPattern = 0b11111111111111110000000000000000;
           steerImuInclinometerData.gyroCalibration = true;
         }
       } );
@@ -815,10 +818,12 @@ gpio_set_pull_mode(GPIO_NUM_13, GPIO_FLOATING);
     {
       ESPUI.addControl( ControlType::Switcher, "MagnetometerCalibration", steerImuInclinometerData.magCalibration ? "1" : "0", ControlColor::Peterriver, tab,
       []( Control * control, int id ) {
-        if (control->value.toInt() == 0 && steerImuInclinometerData.magCalibration){
+        if (steerImuInclinometerData.magCalibration){
+          statusLedPattern = 0b11111111111111100111111111111111;
           genericImuCalibrationCalcMagnetometer();
-        }
+        } else if ( !steerImuInclinometerData.magCalibration )
         steerImuInclinometerData.magCalibration = control->value.toInt() == 1;
+        statusLedPattern = 0b11111111111111110000000000000000;
       } );
     }
 

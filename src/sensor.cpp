@@ -29,7 +29,6 @@
 #include <Adafruit_Sensor.h>
 
 #include <Adafruit_MMA8451.h>
-#include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 #include <utility/quaternion.h>
 
@@ -38,7 +37,6 @@
 
 #include <SparkFunLSM9DS1.h>
 
-#include <Mahony.h>
 #include <Madgwick.h>
 
 #include <Adafruit_ADS1015.h>
@@ -47,9 +45,6 @@
 #include <ESPUI.h>
 
 #include "main.hpp"
-
-#include "average.hpp"
-#include "ringbuffer.hpp"
 
 Adafruit_MMA8451 mma = Adafruit_MMA8451();
 Adafruit_FXAS21002C fxas2100 = Adafruit_FXAS21002C( 0x0021002C );
@@ -63,15 +58,12 @@ float gyroCalData[3] = {0, 0, 0};
 Adafruit_ADS1115 ads = Adafruit_ADS1115( 0x48 );
 
 Madgwick ahrs;
-// Mahony filter;
 
 GenericImuCalibrationData genericimucalibrationdata;
 
 SteerImuInclinometerData steerImuInclinometerData;
 
 volatile uint16_t samplesPerSecond;
-
-Average<float, float, 10> wasAverage;
 
 imu::Quaternion mountingCorrection;
 
@@ -122,7 +114,7 @@ class  FilterBuLp2_3 {
 
 void genericImuCalibrationCalcMagnetometer() {
   //disable further updates
-  steerImuInclinometerData.magCalibration;
+  steerImuInclinometerData.magCalibration = false;
 
   // calibration after https://appelsiini.net/2018/calibrate-magnetometer/
   // calculate hard iron compensation
@@ -146,6 +138,22 @@ void genericImuCalibrationCalcMagnetometer() {
   float avgDelta = (genericimucalibrationdata.mag_softiron[0] + genericimucalibrationdata.mag_softiron[1] + genericimucalibrationdata.mag_softiron[2]) / 3;
 
   genericimucalibrationdata.mag_softiron[0] = avgDelta / genericimucalibrationdata.mag_softiron[0];
+  genericimucalibrationdata.mag_softiron[1] = avgDelta / genericimucalibrationdata.mag_softiron[1];
+  genericimucalibrationdata.mag_softiron[2] = avgDelta / genericimucalibrationdata.mag_softiron[2];
+
+  // debug
+  Serial.print("Magnetometer calibration finisched. Hard iron: ");
+  Serial.print(genericimucalibrationdata.mag_hardiron[0]);
+  Serial.print(", ");
+  Serial.print(genericimucalibrationdata.mag_hardiron[1]);
+  Serial.print(", ");
+  Serial.print(genericimucalibrationdata.mag_hardiron[2]);
+  Serial.print(" - softiron: ");
+  Serial.print(genericimucalibrationdata.mag_softiron[0]);
+  Serial.print(", ");
+  Serial.print(genericimucalibrationdata.mag_softiron[1]);
+  Serial.print(", ");
+  Serial.println(genericimucalibrationdata.mag_softiron[2]);
 
   // reset magCalData for next run
   magCalData[0][0] = 32767;
@@ -205,23 +213,19 @@ void sensorWorkerFxPoller( void* z ) {
     ay = accel_event.acceleration.y;
     az = accel_event.acceleration.z;
 
-     updateImuData(gy, gy, gz, ax, ay, az, mx, my, mz);
+     updateImuData(gx, gy, gz, ax, ay, az, mx, my, mz);
 
     vTaskDelayUntil( &xLastWakeTime, xFrequency );
   }
 }
 
 void sensorWorkerLsmPoller( void* z ) {
-  vTaskDelay( 2000 );
-  constexpr TickType_t xFrequency = 13;
+  vTaskDelay( 2074 );
+  constexpr TickType_t xFrequency = 20; // run at 100hz, but only update
+                                      // IMU-Data with 50hz (for gyro and Acell median)
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
   for ( ;; ) {
-    // where is the data stored
-    float mx,my,mz; //magnetic in uTesla
-    float gx,gy,gz; // gyros in uTesla
-    float ax,ay,az; // acceleration in g
-
     // Get new data samples
     if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
       lsm9ds1.readMag();
@@ -229,28 +233,46 @@ void sensorWorkerLsmPoller( void* z ) {
       lsm9ds1.readAccel();
       xSemaphoreGive( i2cMutex );
     }
-    mx = lsm9ds1.calcMag(lsm9ds1.mx);
-    my = lsm9ds1.calcMag(lsm9ds1.my);
-    mz = lsm9ds1.calcMag(lsm9ds1.mz);
 
+    updateImuData(
+    lsm9ds1.calcGyro(lsm9ds1.gx),
+    lsm9ds1.calcGyro(lsm9ds1.gy),
+    lsm9ds1.calcGyro(lsm9ds1.gz),
 
-    gx = lsm9ds1.calcGyro(lsm9ds1.gx);
-    gy = lsm9ds1.calcGyro(lsm9ds1.gy);
-    gz = lsm9ds1.calcGyro(lsm9ds1.gz);
+    lsm9ds1.calcAccel(lsm9ds1.ax),
+    lsm9ds1.calcAccel(lsm9ds1.ay),
+    lsm9ds1.calcAccel(lsm9ds1.az),
 
-    ax = lsm9ds1.calcAccel(lsm9ds1.ax);
-    ay = lsm9ds1.calcAccel(lsm9ds1.ay);
-    az = lsm9ds1.calcAccel(lsm9ds1.az);
-
-    updateImuData(gy, gy, gz, ax, ay, az, mx, my, mz);
+    lsm9ds1.calcMag(lsm9ds1.mx),
+    lsm9ds1.calcMag(lsm9ds1.my),
+    lsm9ds1.calcMag(lsm9ds1.mz)
+    );
 
     vTaskDelayUntil( &xLastWakeTime, xFrequency );
   }
 }
 
 void updateImuData(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz) {
-  // TODO: collection if calibration is enabled
-  static float imuGyroSumX, imuGyroSumY, imuGyroSumZ;
+
+  // debug
+  // Serial.print("Raw IMU data - gyros: ");
+  // Serial.print(gx);
+  // Serial.print(", ");
+  // Serial.print(gy);
+  // Serial.print(", ");
+  // Serial.print(gz);
+  // Serial.print(" - accel: ");
+  // Serial.print(ax);
+  // Serial.print(", ");
+  // Serial.print(ay);
+  // Serial.print(", ");
+  // Serial.print(az);
+  // Serial.print(" - mag: ");
+  // Serial.print(mx);
+  // Serial.print(", ");
+  // Serial.print(my);
+  // Serial.print(", ");
+  // Serial.println(mz);
 
   // calibration if requested
   { // gyros
@@ -265,6 +287,17 @@ void updateImuData(float gx, float gy, float gz, float ax, float ay, float az, f
         genericimucalibrationdata.gyro_zero_offsets[2] = gyroCalData[2]/1024;
         loopCounter = 0;
         steerImuInclinometerData.gyroCalibration = false;
+        statusLedPattern = 0b11111111111111100111111111111111;
+        gyroCalData[0] = 0;
+        gyroCalData[1] = 0;
+        gyroCalData[2] = 0;
+        // debug
+        Serial.print("Gyro calibration finisched: ");
+        Serial.print(genericimucalibrationdata.gyro_zero_offsets[0]);
+        Serial.print(", ");
+        Serial.print(genericimucalibrationdata.gyro_zero_offsets[1]);
+        Serial.print(", ");
+        Serial.println(genericimucalibrationdata.gyro_zero_offsets[2]);
       } else {
         loopCounter++;
       }
@@ -284,10 +317,10 @@ void updateImuData(float gx, float gy, float gz, float ax, float ay, float az, f
       if (my > magCalData[1][1]) {
         magCalData[1][1] = my;
       }
-      if (mz < magCalData[1][0]) {
+      if (mz < magCalData[2][0]) {
         magCalData[2][0] = mz;
       }
-      if (mz > magCalData[1][1]) {
+      if (mz > magCalData[2][1]) {
         magCalData[2][1] = mz;
       }
     }
@@ -299,9 +332,29 @@ void updateImuData(float gx, float gy, float gz, float ax, float ay, float az, f
   mz = (mz - genericimucalibrationdata.mag_hardiron[2]) * genericimucalibrationdata.mag_softiron[2];
 
   // Apply gyro zero-rate error compensation
-  gx += genericimucalibrationdata.gyro_zero_offsets[0];
-  gy += genericimucalibrationdata.gyro_zero_offsets[1];
-  gz += genericimucalibrationdata.gyro_zero_offsets[2];
+  gx -= genericimucalibrationdata.gyro_zero_offsets[0];
+  gy -= genericimucalibrationdata.gyro_zero_offsets[1];
+  gz -= genericimucalibrationdata.gyro_zero_offsets[2];
+
+  // debug
+  // Serial.print("Cor IMU data - gyros: ");
+  // Serial.print(gx);
+  // Serial.print(", ");
+  // Serial.print(gy);
+  // Serial.print(", ");
+  // Serial.print(gz);
+  // Serial.print(" - accel: ");
+  // Serial.print(ax);
+  // Serial.print(", ");
+  // Serial.print(ay);
+  // Serial.print(", ");
+  // Serial.print(az);
+  // Serial.print(" - mag: ");
+  // Serial.print(mx);
+  // Serial.print(", ");
+  // Serial.print(my);
+  // Serial.print(", ");
+  // Serial.println(mz);
 
   // input into AHRS
   ahrs.update(
@@ -365,6 +418,31 @@ void updateImuData(float gx, float gy, float gz, float ax, float ay, float az, f
         handle->value += ( float )steerImuInclinometerData.heading;
 
         ESPUI.updateControl( handle );
+        // debug
+        Serial.print("Cor IMU data - gyros: ");
+        Serial.print(gx);
+        Serial.print(", ");
+        Serial.print(gy);
+        Serial.print(", ");
+        Serial.print(gz);
+        Serial.print(" - accel: ");
+        Serial.print(ax);
+        Serial.print(", ");
+        Serial.print(ay);
+        Serial.print(", ");
+        Serial.print(az);
+        Serial.print(" - mag: ");
+        Serial.print(mx);
+        Serial.print(", ");
+        Serial.print(my);
+        Serial.print(", ");
+        Serial.print(mz);
+        Serial.print(" - Results - Roll: ");
+        Serial.print(steerImuInclinometerData.roll);
+        Serial.print(", Pitch: ");
+        Serial.print(steerImuInclinometerData.pitch);
+        Serial.print(", Heading: ");
+        Serial.println(steerImuInclinometerData.heading);
       }
     }
   }
@@ -462,7 +540,6 @@ void sensorWorkerSteeringPoller( void* z ) {
 
         wheelAngleTmp = wheelAngleSensorFilter.step( wheelAngleTmp );
         steerSetpoints.actualSteerAngle = wheelAngleTmp;
-        wasAverage += wheelAngleTmp;
       }
 
     }
@@ -516,7 +593,7 @@ void sensorWorker10HzPoller( void* z ) {
         xSemaphoreGive( i2cMutex );
       }
 
-      float fXg, fYg,fZg;
+      float fXg = 0, fYg = 0,fZg = 0;
 
 
       for ( uint8_t i = 0; i < numSamples; i++ ) {
@@ -621,6 +698,19 @@ void initSensors() {
   // LSM9DS1
   if ( steerConfig.inclinoType == SteerConfig::InclinoType::LSM9DS1 ||
        steerConfig.imuType == SteerConfig::ImuType::LSM9DS1 ) {
+    // reset to make sure data is valid after "warmstart"
+    if ( xSemaphoreTake( i2cMutex, 1000 ) == pdTRUE ) {
+      Wire.beginTransmission(0x1C);  //magnetometer
+    	Wire.write(0x21);
+    	Wire.write(12);
+    	Wire.endTransmission();
+      Wire.beginTransmission(0x6A); // accelerometer/gyroscope
+    	Wire.write(0x22);
+    	Wire.write(1);
+    	Wire.endTransmission();
+      xSemaphoreGive( i2cMutex );
+    }
+    delay(5);
     // configuration
     // Use either IMU_MODE_I2C or IMU_MODE_SPI
     lsm9ds1.settings.device.commInterface = IMU_MODE_I2C;
@@ -667,7 +757,7 @@ void initSensors() {
     lsm9ds1.settings.mag.enabled = true; // Enable magnetometer
     // [scale] sets the full-scale range of the magnetometer
     // mag scale can be 4, 8, 12, or 16
-    lsm9ds1.settings.mag.scale = 4;
+    lsm9ds1.settings.mag.scale = 8;
     // [sampleRate] sets the output data rate (ODR) of the
     // magnetometer.
     // mag data rate can be 0-7:
@@ -677,7 +767,7 @@ void initSensors() {
     // 3 = 5 Hz      7 = 80 Hz
     lsm9ds1.settings.mag.sampleRate = 7;
     // [enabled] turns the temperature sensor on or off.
-    lsm9ds1.settings.temp.enabled = true;
+    lsm9ds1.settings.temp.enabled = false;
     // [tempCompensationEnable] enables or disables
     // temperature compensation of the magnetometer.
     lsm9ds1.settings.mag.tempCompensationEnable = true;
@@ -720,7 +810,7 @@ void initSensors() {
         handle->color = ControlColor::Emerald;
         ESPUI.updateControl( handle );
       }
-      ahrs.begin( 76 ); // tradeoff, magnetometer only reports 80 times/second
+      ahrs.begin( 1000.0 / 20.0); // tradeoff, magnetometer only reports 80 times/second
     } else {
       if ( steerConfig.imuType == SteerConfig::ImuType::LSM9DS1 ) {
         initialisation.imuType = SteerConfig::ImuType::None;
