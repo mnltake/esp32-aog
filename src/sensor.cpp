@@ -538,12 +538,39 @@ void sensorWorkerSteeringPoller( void* z ) {
           wheelAngleTmp *= ( float ) -1;
         }
 
-        wheelAngleTmp -= steerConfig.wheelAngleOffset;
+        // Ackermann (ignore everything below 0,5°)
+        if ( (steerConfig.wheelAngleSensorType == SteerConfig::WheelAngleSensorType::AckermannLeft
+            || steerConfig.wheelAngleSensorType == SteerConfig::WheelAngleSensorType::AckermannRight)
+          && (wheelAngleTmp > 0.5 || wheelAngleTmp < 0.5)) {
+          // just for the human, nicer names
+          float wheelbase = steerConfig.wheelAngleFirstArmLenght;
+          float trackWidth = steerConfig.wheelAngleSecondArmLenght;
+          bool negativeAngel = wheelAngleTmp < 0;
+          float mathAngle = abs(wheelAngleTmp) * PI / 180;
 
+          // calculate the distance of the adjacent side of the triangle (turning point rear axle <-> turn circle center)
+          float distance = wheelbase / tan( mathAngle );
+          // add or substract half the trackWidth
+          if ( ( negativeAngel && steerConfig.wheelAngleSensorType == SteerConfig::WheelAngleSensorType::AckermannLeft )
+            || ( ! negativeAngel && steerConfig.wheelAngleSensorType == SteerConfig::WheelAngleSensorType::AckermannRight ) ) {
+            distance += trackWidth / 2;
+          } else {
+            distance -= trackWidth / 2;
+          }
+
+          // now calculate the virtual wheel in the center
+          mathAngle = atan(wheelbase / distance);
+
+          // convert back to degrees and add go back to negative/positive
+          if (negativeAngel) {
+            wheelAngleTmp = mathAngle * 180 / PI * -1;
+          } else {
+            wheelAngleTmp = mathAngle * 180 / PI;
+          }
+        }
         wheelAngleTmp = wheelAngleSensorFilter.step( wheelAngleTmp );
         steerSetpoints.actualSteerAngle = wheelAngleTmp;
       }
-
     }
 
     {
