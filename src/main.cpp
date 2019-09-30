@@ -158,8 +158,11 @@ bool FXL6408_getDigitalInput(uint8_t port)  {
 }
 
 void FXL6408_setDigitalOutput(uint8_t port, bool state) {
+  uint8_t old = fxl6408_outputRegister;
   fxl6408_outputRegister = FXL6408_setBit(fxl6408_outputRegister, port, state);
-  FXL6408_setByteI2C(0x05, fxl6408_outputRegister);
+  if (old != fxl6408_outputRegister) {
+    FXL6408_setByteI2C(0x05, fxl6408_outputRegister);
+  }
 };
 
 uint8_t FXL6408_getByteI2C(int i2cregister) {
