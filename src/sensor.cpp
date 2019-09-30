@@ -98,18 +98,18 @@ class  FilterBuLp2_3 {
       v[1] = 0.0;
     }
   private:
-    float v[3];
-  public:
-    float step( float x ) { //class II
-      v[0] = v[1];
-      v[1] = v[2];
-      v[2] = ( 2.008336556421122521e-2 * x )
-             + ( -0.64135153805756306422 * v[0] )
-             + ( 1.56101807580071816339 * v[1] );
-      return
-        ( v[0] + v[2] )
-        + 2 * v[1];
-    }
+  		float v[3];
+  	public:
+  		float step(float x) { //class II
+  			v[0] = v[1];
+  			v[1] = v[2];
+  			v[2] = (6.745527388907189559e-2 * x)
+  				 + (-0.41280159809618854894 * v[0])
+  				 + (1.14298050253990091107 * v[1]);
+  			return
+  				 (v[0] + v[2])
+  				+2 * v[1];
+  		}
 } wheelAngleSensorFilter;
 
 void genericImuCalibrationCalcMagnetometer() {
@@ -451,7 +451,7 @@ void updateImuData(float gx, float gy, float gz, float ax, float ay, float az, f
 
 void sensorWorkerSteeringPoller( void* z ) {
   vTaskDelay( 2000 );
-  constexpr TickType_t xFrequency = 10;
+  constexpr TickType_t xFrequency = 20;
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
   for ( ;; ) {
@@ -503,6 +503,8 @@ void sensorWorkerSteeringPoller( void* z ) {
         }
 
         steerSetpoints.wheelAngleRaw = wheelAngleTmp;
+
+        // now zero position and counts per degre of the sensor is nown (raw value)
 
         if ( steerConfig.wheelAngleSensorType == SteerConfig::WheelAngleSensorType::TieRodDisplacement ) {
           if ( steerConfig.wheelAngleFirstArmLenght != 0 && steerConfig.wheelAngleSecondArmLenght != 0 &&

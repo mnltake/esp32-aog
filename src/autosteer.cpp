@@ -45,8 +45,8 @@ AutoPID pid(
 
 constexpr time_t Timeout = 2000;
 
-void autosteerWorker100Hz( void* z ) {
-  constexpr TickType_t xFrequency = 10;
+void autosteerWorker( void* z ) {
+  constexpr TickType_t xFrequency = 20;
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
   pid.setTimeStep( xFrequency );
@@ -80,7 +80,7 @@ void autosteerWorker100Hz( void* z ) {
 
         static uint8_t loopCounter = 0;
 
-        if ( ++loopCounter >= 10 ) {
+        if ( ++loopCounter >= 5 ) {
           loopCounter = 0;
 
           //close enough to center, 4 cm, remove any correction
@@ -235,7 +235,7 @@ if ( driveValue < 0 ) {
     {
       static uint8_t loopCounter = 0;
 
-      if ( ++loopCounter >= 10 ) {
+      if ( ++loopCounter >= 5 ) {
         loopCounter = 0;
 
         if ( initialisation.outputType != SteerConfig::OutputType::None ) {
@@ -654,5 +654,5 @@ void initAutosteer() {
 
   }
 
-  xTaskCreate( autosteerWorker100Hz, "autosteerWorker", 4096, NULL, 3, NULL );
+  xTaskCreate( autosteerWorker, "autosteerWorker", 4096, NULL, 3, NULL );
 }
