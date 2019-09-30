@@ -547,14 +547,14 @@ void sensorWorkerSteeringPoller( void* z ) {
           // just for the human, nicer names
           float wheelbase = steerConfig.wheelAngleFirstArmLenght;
           float trackWidth = steerConfig.wheelAngleSecondArmLenght;
-          bool negativeAngel = wheelAngleTmp < 0;
+          bool negativeAngle = wheelAngleTmp < 0;
           float mathAngle = abs(wheelAngleTmp) * PI / 180;
 
           // calculate the distance of the adjacent side of the triangle (turning point rear axle <-> turn circle center)
           float distance = wheelbase / tan( mathAngle );
           // add or substract half the trackWidth
-          if ( ( negativeAngel && steerConfig.wheelAngleSensorType == SteerConfig::WheelAngleSensorType::AckermannLeft )
-            || ( ! negativeAngel && steerConfig.wheelAngleSensorType == SteerConfig::WheelAngleSensorType::AckermannRight ) ) {
+          if ( ( negativeAngle && steerConfig.wheelAngleSensorType == SteerConfig::WheelAngleSensorType::AckermannLeft )
+            || ( ! negativeAngle && steerConfig.wheelAngleSensorType == SteerConfig::WheelAngleSensorType::AckermannRight ) ) {
             distance += trackWidth / 2;
           } else {
             distance -= trackWidth / 2;
@@ -564,7 +564,7 @@ void sensorWorkerSteeringPoller( void* z ) {
           mathAngle = atan(wheelbase / distance);
 
           // convert back to degrees and add go back to negative/positive
-          if (negativeAngel) {
+          if (negativeAngle) {
             wheelAngleTmp = mathAngle * 180 / PI * -1;
           } else {
             wheelAngleTmp = mathAngle * 180 / PI;
