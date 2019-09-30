@@ -534,9 +534,11 @@ void sensorWorkerSteeringPoller( void* z ) {
           }
         }
 
+        // adjust the signal
         if ( steerConfig.invertWheelAngleSensor ) {
           wheelAngleTmp *= ( float ) -1;
         }
+        wheelAngleTmp -= steerConfig.wheelAngleOffset;
 
         // Ackermann (ignore everything below 0,5°)
         if ( (steerConfig.wheelAngleSensorType == SteerConfig::WheelAngleSensorType::AckermannLeft
