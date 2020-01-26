@@ -300,12 +300,15 @@ void inputsWheelAngleTask(void *z) {
   while (1) {
     float newInput = fabs(ioAccessGetAnalogInput(inputsWasSetup.inputPort)); // use fabs is the signal goes to negative numbers, eg. uses 5V for preferences
     inputsWasSetup.statusRaw = newInput;
-    if (inputsWasSetup.invertSensor) {
-      newInput = 1 - newInput;
-    }
+
     // center = 0
     newInput = newInput - inputsWasSetup.center;
 
+    //invertSensor
+    if (inputsWasSetup.invertSensor) {
+      newInput *= -1;
+    }
+    
     // multiply to get the degres
     newInput = newInput * inputsWasSetup.degreMultiplier;
     inputsWasSetup.statusDegrees = newInput;
