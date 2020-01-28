@@ -123,6 +123,7 @@ void steeringTask( void* z ) {
     if (!udpActualData.steerSwitch ||                    // steering disabled == true
         steeringSettings.testMinPwm ||                           // just minPWM test
         udpAogData.lastReceived7FFE < (millis() - udpTimeout) || // timeout
+        udpAogData.speedx4  >  4 ||                              //spd > 1km/h
         udpAogData.distanceFromGuidanceLine == 32020 ) {         // AOG disabled
       // no steering active
       if (udpAogData.lastReceived7FFE < (millis() - udpTimeout)) {
