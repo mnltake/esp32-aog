@@ -32,6 +32,7 @@ void udpHandlerCreateReceiveHandler() {
       uint16_t pgn = data[1] + ( data[0] << 8 );
       switch ( pgn ) {
         case 0x7FFE: {
+          udpAogData.speed = data[3]*0.25;
           udpAogData.distanceFromGuidanceLine = data[5] + ( data[4] << 8 );
           udpAogData.requiredSteerAngle = (( int16_t )( data[7] + ( data[6] << 8 ) )) / 100.0;
           udpAogData.uTurnRelais = data[8];

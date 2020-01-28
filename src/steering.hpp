@@ -20,6 +20,8 @@ struct SteeringCurrentSettings {
   float BangOff = 0.25;
   // for PWM
   uint8_t minPWM = 5;
+  float minSpeed = 1.0;
+  float maxSpeed = 20.0;
   bool testMinPwm = false;
   bool invertOutput = false;
 };

@@ -5,6 +5,7 @@
 
 struct UdpFromAogData {
   uint lastReceived7FFE;
+  float speed = 0.0;
   int16_t distanceFromGuidanceLine = 32020;
   float requiredSteerAngle;
   byte uTurnRelais;
