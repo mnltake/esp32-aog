@@ -212,7 +212,7 @@ void steeringTask( void* z ) {
     }
 
     ioAccessMotor1(motorPWM);
-
+    udpActualData.pwm = pidOutput;
     vTaskDelayUntil( &xLastWakeTime, xFrequency );
   }
 }
