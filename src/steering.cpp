@@ -82,7 +82,7 @@ void steeringInit() {
       ESPUI.updateControl( control );
     } );
   steeringSettings.minPWM = preferences.getFloat("steeringMinPwm", steeringSettings.minPWM);
-  ESPUI.addControl( ControlType::Number, "Minimam PWM Value (0-255)", (String)steeringSettings.minPWM, ControlColor::Wetasphalt, webTabSteeringActuator,
+  ESPUI.addControl( ControlType::Number, "Minimal PWM Value (0-255)", (String)steeringSettings.minPWM, ControlColor::Wetasphalt, webTabSteeringActuator,
     []( Control * control, int id ) {
       steeringSettings.minPWM = control->value.toFloat();
       preferences.putFloat("steeringMinPwm", steeringSettings.minPWM);
@@ -90,7 +90,7 @@ void steeringInit() {
       ESPUI.updateControl( control );
     } );
   steeringSettings.minSpeed = preferences.getFloat("steeringMinSpeed", steeringSettings.minSpeed);
-  ESPUI.addControl( ControlType::Number, "Minimam Speed(km/h)", (String)steeringSettings.minSpeed, ControlColor::Wetasphalt, webTabSteeringActuator,
+  ESPUI.addControl( ControlType::Number, "Minimal Speed(km/h)", (String)steeringSettings.minSpeed, ControlColor::Wetasphalt, webTabSteeringActuator,
     []( Control * control, int id ) {
       steeringSettings.minSpeed = control->value.toFloat();
       preferences.putFloat("steeringMinSpeed", steeringSettings.minSpeed);
@@ -98,7 +98,7 @@ void steeringInit() {
       ESPUI.updateControl( control );
     } );
   steeringSettings.maxSpeed = preferences.getFloat("steeringMaxSpeed", steeringSettings.maxSpeed);
-  ESPUI.addControl( ControlType::Number, "Maximam Speed(km/h)", (String)steeringSettings.maxSpeed, ControlColor::Wetasphalt, webTabSteeringActuator,
+  ESPUI.addControl( ControlType::Number, "Maximal Speed(km/h)", (String)steeringSettings.maxSpeed, ControlColor::Wetasphalt, webTabSteeringActuator,
     []( Control * control, int id ) {
       steeringSettings.maxSpeed = control->value.toFloat();
       preferences.putFloat("steeringMaxSpeed", steeringSettings.maxSpeed);
@@ -212,7 +212,7 @@ void steeringTask( void* z ) {
     }
 
     ioAccessMotor1(motorPWM);
-
+    udpActualData.pwm = pidOutput;
     vTaskDelayUntil( &xLastWakeTime, xFrequency );
   }
 }

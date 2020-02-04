@@ -48,7 +48,7 @@ void udpHandlerSendData( void* z ) {
   constexpr TickType_t xFrequency = 100; // every 100ms, so data at aog is relativly current without overwhelming the process
 
   while ( 1 ) {
-    byte toSend[] = {0x7F,0x7D,0,0,0,0,0,0,0,0}; // steering data
+    byte toSend[] = {0x7F,0xFD,0,0,0,0,0,0,0,0}; // steering data
 
     // steer angles
     int16_t temp = round(100 * udpActualData.steerAngleActual);
@@ -73,10 +73,11 @@ void udpHandlerSendData( void* z ) {
     toSend[8] = (byte)temp;
 
     //pwm
-    temp = udpActualData.pwm / 2; // internal PWM +- 255
+    temp = udpActualData.pwm ; // internal PWM +- 255
     toSend[9] = (byte)temp;
 
     //send
+
     if (udpHandlerSender.broadcastTo( toSend, sizeof(toSend), 9999 )) {
       udpActualData.lastSent = millis();
     }
